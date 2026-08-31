@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sonidos para QR nuevo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "DM Sans", system-ui, sans-serif;
+      background: #070b14;
+      color: #e8eef8;
+      padding: 32px 20px 48px;
+    }
+    .wrap { max-width: 880px; margin: 0 auto; }
+    h1 { font-size: 1.6rem; font-weight: 700; margin: 0 0 8px; }
+    p.lead { color: #9aa8bd; margin: 0 0 28px; line-height: 1.5; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 14px;
+    }
+    button.card {
+      text-align: left;
+      border: 1px solid #243044;
+      background: #101826;
+      color: inherit;
+      border-radius: 14px;
+      padding: 16px 16px 14px;
+      cursor: pointer;
+      font-family: inherit;
+      transition: border-color .15s, transform .12s, background .15s;
+    }
+    button.card:hover { border-color: #3b82f6; background: #132033; }
+    button.card:active { transform: scale(0.98); }
+    button.card.playing { border-color: #60a5fa; box-shadow: 0 0 0 3px rgba(59,130,246,.25); }
+    .num { font-size: 0.75rem; color: #60a5fa; font-weight: 600; letter-spacing: .04em; }
+    h2 { margin: 6px 0 6px; font-size: 1.05rem; }
+    .desc { margin: 0; color: #9aa8bd; font-size: 0.88rem; line-height: 1.4; }
+    .hint { margin-top: 28px; color: #7b8aa0; font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Sonidos para cuando llega un QR</h1>
+    <p class="lead">Dale clic a cada uno. Sube un poco el volumen. Dime el numero o el nombre del que te guste y lo dejamos en Pagos QR.</p>
+    <div class="grid" id="grid"></div>
+    <p class="hint">El navegador a veces pide un clic antes de reproducir audio. Si el primero no suena, prueba otra vez.</p>
+  </div>
+  <script>
+    const sounds = [{"id":"ping","name":"Ping","desc":"Un toque corto, tipo mensaje. Discreto.","src":"/sounds/ping.wav"},{"id":"doble-beep","name":"Doble beep","desc":"Dos pitidos, estilo datafono / POS.","src":"/sounds/doble-beep.wav"},{"id":"campanita","name":"Campanita","desc":"Dos notas altas, como un timbre suave.","src":"/sounds/campanita.wav"},{"id":"chime","name":"Chime","desc":"Do-Mi-Sol. Suena a listo / exito.","src":"/sounds/chime.wav"},{"id":"ka-ching","name":"Ka-ching","desc":"Caja registradora light: grave + agudo.","src":"/sounds/ka-ching.wav"},{"id":"gotita","name":"Gotita","desc":"Muy suave, casi un plop. Poco invasivo.","src":"/sounds/gotita.wav"},{"id":"acorde","name":"Acorde","desc":"Tres notas a la vez. Calido, no urgente.","src":"/sounds/acorde.wav"},{"id":"alerta","name":"Alerta suave","desc":"Dos notas subiendo. Se nota, sin gritar.","src":"/sounds/alerta.wav"}];
+    const grid = document.getElementById("grid");
+    let current;
+    sounds.forEach((s, i) => {
+      const b = document.createElement("button");
+      b.className = "card";
+      b.type = "button";
+      b.innerHTML = '<div class="num">Opcion ' + (i + 1) + '</div><h2>' + s.name + '</h2><p class="desc">' + s.desc + '</p>';
+      b.addEventListener("click", async () => {
+        if (current) { current.pause(); current.currentTime = 0; }
+        document.querySelectorAll("button.card").forEach((el) => el.classList.remove("playing"));
+        b.classList.add("playing");
+        const a = new Audio(s.src);
+        current = a;
+        a.addEventListener("ended", () => b.classList.remove("playing"));
+        try { await a.play(); } catch (e) { b.classList.remove("playing"); }
+      });
+      grid.appendChild(b);
+    });
+  </script>
+</body>
+</html>
