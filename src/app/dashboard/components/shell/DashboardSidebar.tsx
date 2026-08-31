@@ -7,33 +7,27 @@ import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import SidebarAppearanceControls from "./SidebarAppearanceControls";
 
-function IconBag() {
+function NavIconBox({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center overflow-visible">
+      {children}
+    </span>
+  );
+}
+
+function IconQr() {
   return (
     <svg
       width="22"
       height="22"
-      viewBox="0 0 32 32"
+      viewBox="0 0 24 24"
+      fill="none"
       xmlns="http://www.w3.org/2000/svg"
       aria-hidden="true"
     >
-      <path
-        d="M27,29H5V17H3.235c-1.138,0-1.669-1.419-0.812-2.168L14.131,3.745c1.048-0.993,2.689-0.993,3.737,0l11.707,11.087  C30.433,15.58,29.902,17,28.763,17H27V29z"
-        fill="none"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeMiterlimit={10}
-        strokeWidth={2}
-      />
-      <path
-        d="M20,29h-8v-6c0-2.209,1.791-4,4-4h0c2.209,0,4,1.791,4,4V29z"
-        fill="none"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeMiterlimit={10}
-        strokeWidth={2}
-      />
+      <rect x="2.8" y="2.8" width="7.4" height="7.4" rx="1.4" fill="currentColor" />
+      <rect x="13.8" y="2.8" width="7.4" height="7.4" rx="1.4" fill="currentColor" />
+      <rect x="2.8" y="13.8" width="7.4" height="7.4" rx="1.4" fill="currentColor" />
     </svg>
   );
 }
@@ -43,14 +37,64 @@ function IconStats() {
     <svg
       width="22"
       height="22"
-      viewBox="0 0 16 15"
+      viewBox="0 0 24 24"
+      fill="none"
       xmlns="http://www.w3.org/2000/svg"
       aria-hidden="true"
     >
       <path
-        d="M14.5,14V3h-4V0h-5v9h-4v5H0v1h1.5h4h1h3h1h4H16v-1H14.5z M2.5,14v-4h3v4H2.5z M6.5,14V9V1h3v2v11H6.5z M10.5,14V4h3v10  H10.5z"
-        fill="currentColor"
+        d="M2.8 20.7h18.4"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
       />
+      <rect x="4" y="11.1" width="4.4" height="7.8" rx="1" fill="currentColor" />
+      <rect x="9.8" y="3.3" width="4.4" height="15.6" rx="1" fill="currentColor" />
+      <rect x="15.6" y="7.1" width="4.4" height="11.8" rx="1" fill="currentColor" />
+    </svg>
+  );
+}
+
+function IconPeso() {
+  return (
+    <svg
+      width="22"
+      height="22"
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="9.35" stroke="currentColor" strokeWidth="2" />
+      <g transform="translate(12 12) scale(1.12) translate(-12 -12)">
+        <path
+          d="M14.85 8.85c-.4-1.05-1.5-1.7-2.85-1.7-1.7 0-2.95.95-2.95 2.25 0 3.05 5.8 1.25 5.8 4.3 0 1.35-1.35 2.3-2.95 2.3-1.4 0-2.5-.65-2.9-1.65"
+          stroke="currentColor"
+          strokeWidth="1.85"
+          strokeLinecap="round"
+        />
+        <path
+          d="M12 6.55v1.35M12 16.1v1.35"
+          stroke="currentColor"
+          strokeWidth="1.85"
+          strokeLinecap="round"
+        />
+      </g>
+    </svg>
+  );
+}
+
+function IconSettings() {
+  return (
+    <svg
+      width="22"
+      height="22"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <path d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.06-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.61-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54A.5.5 0 0 0 13.9 2h-3.8a.5.5 0 0 0-.5.42l-.36 2.54c-.59.24-1.13.56-1.62.94l-2.39-.96a.5.5 0 0 0-.61.22L2.8 8.48a.5.5 0 0 0 .12.64l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94L2.92 14.1a.5.5 0 0 0-.12.64l1.92 3.32c.14.24.43.34.61.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.26.42.5.42h3.8c.24 0 .45-.18.5-.42l.36-2.54c.59-.24 1.12-.56 1.62-.94l2.39.96c.18.12.47.02.61-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z" />
     </svg>
   );
 }
@@ -76,12 +120,20 @@ export default function DashboardSidebar({
 
   const items: NavItem[] = useMemo(() => {
     const all: NavItem[] = [
-      { href: "/dashboard", label: "Inicio", icon: <IconBag /> },
+      { href: "/dashboard", label: "Pagos QR", icon: <IconQr /> },
+      { href: "/dashboard/sales", label: "Ventas", icon: <IconPeso /> },
       { href: "/dashboard/stats", label: "Estadísticas", icon: <IconStats /> },
+      {
+        href: "/dashboard/settings",
+        label: "Configuración",
+        icon: <IconSettings />,
+      },
     ];
     if (username === undefined) return all;
     if (!canAccessStats(username)) {
-      return all.filter((it) => it.href !== "/dashboard/stats");
+      return all.filter(
+        (it) => it.href !== "/dashboard/stats" && it.href !== "/dashboard/settings"
+      );
     }
     return all;
   }, [username]);
@@ -156,18 +208,18 @@ export default function DashboardSidebar({
             <Link
               key={it.href}
               href={it.href}
+              onClick={() => onRequestClose?.()}
               className="flex items-center gap-3 rounded-xl px-3 py-3 transition-colors"
               style={{
                 backgroundColor: selected ? "var(--primary-600)" : "transparent",
                 color: selected ? "white" : "var(--primary-700)",
               }}
             >
-              <span
-                className="flex items-center justify-center"
-                style={{ color: selected ? "white" : "var(--primary-700)" }}
-              >
-                {it.icon}
-              </span>
+              <NavIconBox>
+                <span style={{ color: selected ? "white" : "var(--primary-700)" }}>
+                  {it.icon}
+                </span>
+              </NavIconBox>
               <span className="text-sm font-medium">{it.label}</span>
             </Link>
           );

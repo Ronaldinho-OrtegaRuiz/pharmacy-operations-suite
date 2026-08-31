@@ -1,12 +1,12 @@
 import DashboardPaymentsSection from "./components/payments/DashboardPaymentsSection";
 
 export const metadata = {
-  title: "Dashboard",
+  title: "Pagos QR",
 };
 
 export default function DashboardPage() {
   return (
-    <section aria-label="Contenido dashboard">
+    <section aria-label="Contenido pagos QR">
       <DashboardPaymentsSection />
     </section>
   );

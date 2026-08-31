@@ -11,6 +11,12 @@ export const PAYMENTS_DATE_TIMEZONE =
 /** Hoy + este número de días hacia atrás (inclusive). 3 → 4 días en total. */
 export const NON_ADMIN_MAX_DAYS_BACK = 3;
 
+/** Primer día del mes civil de un YYYY-MM-DD (sin cambiar de zona). */
+export function firstYmdOfMonth(ymd: string): string {
+  const m = ymd.trim().match(/^(\d{4}-\d{2})-\d{2}$/);
+  return m ? `${m[1]}-01` : ymd;
+}
+
 /** YYYY-MM-DD del instante en la zona. */
 export function todayYmdInTz(timeZone: string = PAYMENTS_DATE_TIMEZONE): string {
   const d = new Date();
