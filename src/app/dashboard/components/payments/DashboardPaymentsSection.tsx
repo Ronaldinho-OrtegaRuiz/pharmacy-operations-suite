@@ -15,6 +15,10 @@ import {
   type PaymentItem,
   type PaymentsQueryParams,
 } from "@/lib/payments";
+import {
+  playQrPaymentSound,
+  unlockQrPaymentSound,
+} from "@/lib/qr-payment-sound";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ClientsTable from "./ClientsTable";
@@ -198,6 +202,16 @@ export default function DashboardPaymentsSection() {
   }, [loadPayments]);
 
   useEffect(() => {
+    const onGesture = () => unlockQrPaymentSound();
+    window.addEventListener("pointerdown", onGesture, { passive: true });
+    window.addEventListener("keydown", onGesture);
+    return () => {
+      window.removeEventListener("pointerdown", onGesture);
+      window.removeEventListener("keydown", onGesture);
+    };
+  }, []);
+
+  useEffect(() => {
     const token = getToken();
     if (!token) return;
 
@@ -212,6 +226,7 @@ export default function DashboardPaymentsSection() {
       try {
         const data = JSON.parse(ev.data as string) as { type?: string };
         if (data?.type === "new_payment") {
+          playQrPaymentSound();
           void loadRef.current?.();
         }
       } catch {
