@@ -14,6 +14,7 @@ import {
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import StoreBadges, { DROGUERIA_RICKY_ID } from "../payments/StoreBadges";
+import StatsInvoicesSection from "./StatsInvoicesSection";
 import { PaymentsLineChart, ValueBarChart } from "./StatsCharts";
 
 const MONTH_NAMES_ES = [
@@ -31,7 +32,7 @@ const MONTH_NAMES_ES = [
   "Diciembre",
 ] as const;
 
-type StatsMetric = "qr" | "sales";
+type StatsMetric = "qr" | "sales" | "invoices";
 type StatsPeriod = "month" | "year";
 
 const selectClass =
@@ -296,7 +297,7 @@ export default function StatsPageClient() {
   const monthLabelsShort = MONTH_NAMES_ES.map((n) => n.slice(0, 3));
 
   return (
-    <section aria-label="Estadísticas QR y ventas" className="w-full max-w-5xl pb-8">
+    <section aria-label="Estadísticas QR, ventas y facturas" className="w-full max-w-5xl pb-8">
       <h1
         className="text-2xl font-bold"
         style={{ color: "var(--primary-800)" }}
@@ -304,7 +305,7 @@ export default function StatsPageClient() {
         Estadísticas
       </h1>
       <p className="mt-1 text-sm" style={{ color: "var(--primary-700)" }}>
-        Pagos QR y ventas de caja por mes o año.
+        Pagos QR, ventas de caja y facturas por mes o año.
       </p>
 
       <div className="mt-6 w-full max-w-4xl">
@@ -324,6 +325,7 @@ export default function StatsPageClient() {
           options={[
             { id: "qr", label: "Pagos QR" },
             { id: "sales", label: "Ventas" },
+            { id: "invoices", label: "Facturas" },
           ]}
         />
         <SegmentToggle
@@ -673,6 +675,10 @@ export default function StatsPageClient() {
             </ChartCard>
           ) : null}
 
+          {metric === "invoices" ? (
+            <StatsInvoicesSection periodTitle={periodTitle} data={data} />
+          ) : null}
+
           <article
             className="w-full rounded-2xl border p-5 shadow-sm"
             style={{
@@ -704,6 +710,18 @@ export default function StatsPageClient() {
                 label="Participación QR / caja:"
                 value={formatShare(data.compare.qr_share)}
               />
+              {data.compare.invoices_issued != null ? (
+                <KpiChip
+                  label="Facturas emitidas (período):"
+                  value={moneyFromApi(data.compare.invoices_issued)}
+                />
+              ) : null}
+              {data.compare.invoices_open_now != null ? (
+                <KpiChip
+                  label="Por pagar hoy:"
+                  value={moneyFromApi(data.compare.invoices_open_now)}
+                />
+              ) : null}
             </div>
           </article>
         </div>

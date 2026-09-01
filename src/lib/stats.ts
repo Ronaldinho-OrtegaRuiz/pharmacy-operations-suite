@@ -8,6 +8,92 @@ export type VsPrevious = {
   value_pct?: string | null;
 };
 
+export type InvoiceVsPrevious = {
+  count_pct?: string | null;
+  value_pct?: string | null;
+};
+
+export type AgingBucket = {
+  count: number;
+  total: string;
+};
+
+export type InvoiceAging = {
+  not_due: AgingBucket;
+  d1_7: AgingBucket;
+  d8_30: AgingBucket;
+  d31_plus: AgingBucket;
+};
+
+export type InvoiceSnapshot = {
+  open_now_count: number;
+  open_now_total: string;
+  overdue_now_count: number;
+  overdue_now_total: string;
+  due_7d_count: number;
+  due_7d_total: string;
+};
+
+export type InvoiceSupplierPeriod = {
+  supplier_id: number;
+  supplier: string;
+  issued_count: number;
+  issued_total: string;
+  paid_total: string;
+  open_total: string;
+  overdue_total: string;
+};
+
+export type InvoiceSupplierOpen = {
+  supplier_id: number;
+  supplier: string;
+  open_total: string;
+  overdue_total: string;
+};
+
+export type MonthInvoices = {
+  kpis: {
+    issued_count: number;
+    issued_total: string;
+    avg_amount: string | null;
+    paid_count: number;
+    paid_total: string;
+    open_count: number;
+    open_total: string;
+    overdue_count: number;
+    overdue_total: string;
+    vs_previous: InvoiceVsPrevious;
+    by_supplier: InvoiceSupplierPeriod[];
+  };
+  series: { date: string; count: number; amount: string }[];
+  snapshot: InvoiceSnapshot;
+  aging: InvoiceAging;
+  by_supplier_open: InvoiceSupplierOpen[];
+};
+
+export type YearInvoices = {
+  kpis: {
+    issued_count: number;
+    issued_total: string;
+    avg_amount: string | null;
+    avg_issued_per_month: string;
+    paid_count: number;
+    paid_total: string;
+    open_count: number;
+    open_total: string;
+    overdue_count: number;
+    overdue_total: string;
+    best_month: ExtremeMonth;
+    worst_month: ExtremeMonth;
+    vs_previous: InvoiceVsPrevious;
+    by_supplier: InvoiceSupplierPeriod[];
+  };
+  series: { month: number; count: number; amount: string }[];
+  snapshot: InvoiceSnapshot;
+  aging: InvoiceAging;
+  by_supplier_open: InvoiceSupplierOpen[];
+};
+
 export type ShiftKpi = {
   shift_no: number;
   total: string;
@@ -20,6 +106,8 @@ export type StatsCompare = {
   sales_total: string;
   delta: string;
   qr_share: string | null;
+  invoices_issued?: string;
+  invoices_open_now?: string;
 };
 
 export type MonthStats = {
@@ -62,6 +150,7 @@ export type MonthStats = {
       shifts: { shift_no: number; amount: string | null }[];
     }[];
   };
+  invoices?: MonthInvoices;
   compare: StatsCompare;
 };
 
@@ -96,6 +185,7 @@ export type YearStats = {
     };
     series: { month: number; value: string }[];
   };
+  invoices?: YearInvoices;
   compare: StatsCompare;
 };
 
@@ -164,6 +254,277 @@ function parseVsPrevious(raw: unknown): VsPrevious {
   };
 }
 
+function parseInvoiceVsPrevious(raw: unknown): InvoiceVsPrevious {
+  if (!raw || typeof raw !== "object") return {};
+  const o = raw as Record<string, unknown>;
+  return {
+    count_pct: "count_pct" in o ? asPct(o.count_pct) : undefined,
+    value_pct: "value_pct" in o ? asPct(o.value_pct) : undefined,
+  };
+}
+
+function parseAgingBucket(raw: unknown): AgingBucket {
+  if (!raw || typeof raw !== "object") {
+    return { count: 0, total: "0.00" };
+  }
+  const o = raw as Record<string, unknown>;
+  const total = asMoneyString(o.total) ?? "0.00";
+  return {
+    count: typeof o.count === "number" ? o.count : 0,
+    total,
+  };
+}
+
+function parseInvoiceAging(raw: unknown): InvoiceAging {
+  if (!raw || typeof raw !== "object") {
+    const empty = { count: 0, total: "0.00" };
+    return {
+      not_due: empty,
+      d1_7: empty,
+      d8_30: empty,
+      d31_plus: empty,
+    };
+  }
+  const o = raw as Record<string, unknown>;
+  return {
+    not_due: parseAgingBucket(o.not_due),
+    d1_7: parseAgingBucket(o.d1_7),
+    d8_30: parseAgingBucket(o.d8_30),
+    d31_plus: parseAgingBucket(o.d31_plus),
+  };
+}
+
+function parseInvoiceSnapshot(raw: unknown): InvoiceSnapshot | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  const open_now_total = asMoneyString(o.open_now_total);
+  const overdue_now_total = asMoneyString(o.overdue_now_total);
+  const due_7d_total = asMoneyString(o.due_7d_total);
+  if (open_now_total == null || overdue_now_total == null || due_7d_total == null) {
+    return null;
+  }
+  return {
+    open_now_count:
+      typeof o.open_now_count === "number" ? o.open_now_count : 0,
+    open_now_total,
+    overdue_now_count:
+      typeof o.overdue_now_count === "number" ? o.overdue_now_count : 0,
+    overdue_now_total,
+    due_7d_count: typeof o.due_7d_count === "number" ? o.due_7d_count : 0,
+    due_7d_total,
+  };
+}
+
+function parseInvoiceSupplierPeriod(raw: unknown): InvoiceSupplierPeriod | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  if (typeof o.supplier_id !== "number" || typeof o.supplier !== "string") {
+    return null;
+  }
+  if (typeof o.issued_count !== "number") return null;
+  const issued_total = asMoneyString(o.issued_total);
+  const paid_total = asMoneyString(o.paid_total);
+  const open_total = asMoneyString(o.open_total);
+  const overdue_total = asMoneyString(o.overdue_total);
+  if (
+    issued_total == null ||
+    paid_total == null ||
+    open_total == null ||
+    overdue_total == null
+  ) {
+    return null;
+  }
+  return {
+    supplier_id: o.supplier_id,
+    supplier: o.supplier,
+    issued_count: o.issued_count,
+    issued_total,
+    paid_total,
+    open_total,
+    overdue_total,
+  };
+}
+
+function parseInvoiceSupplierOpen(raw: unknown): InvoiceSupplierOpen | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  if (typeof o.supplier_id !== "number" || typeof o.supplier !== "string") {
+    return null;
+  }
+  const open_total = asMoneyString(o.open_total);
+  const overdue_total = asMoneyString(o.overdue_total);
+  if (open_total == null || overdue_total == null) return null;
+  return {
+    supplier_id: o.supplier_id,
+    supplier: o.supplier,
+    open_total,
+    overdue_total,
+  };
+}
+
+function parseMonthInvoices(raw: unknown): MonthInvoices | null {
+  if (!raw || typeof raw !== "object") return null;
+  const inv = raw as Record<string, unknown>;
+  if (!inv.kpis || typeof inv.kpis !== "object") return null;
+  if (!Array.isArray(inv.series)) return null;
+
+  const k = inv.kpis as Record<string, unknown>;
+  const issued_total = asMoneyString(k.issued_total);
+  const paid_total = asMoneyString(k.paid_total);
+  const open_total = asMoneyString(k.open_total);
+  const overdue_total = asMoneyString(k.overdue_total);
+  if (
+    typeof k.issued_count !== "number" ||
+    issued_total == null ||
+    typeof k.paid_count !== "number" ||
+    paid_total == null ||
+    typeof k.open_count !== "number" ||
+    open_total == null ||
+    typeof k.overdue_count !== "number" ||
+    overdue_total == null
+  ) {
+    return null;
+  }
+
+  const series = inv.series
+    .map((row) => {
+      if (!row || typeof row !== "object") return null;
+      const o = row as Record<string, unknown>;
+      const amount = asMoneyString(o.amount);
+      if (
+        typeof o.date !== "string" ||
+        typeof o.count !== "number" ||
+        amount == null
+      ) {
+        return null;
+      }
+      return { date: o.date, count: o.count, amount };
+    })
+    .filter(
+      (x): x is { date: string; count: number; amount: string } => x != null
+    );
+
+  const snapshot = parseInvoiceSnapshot(inv.snapshot);
+  if (!snapshot) return null;
+
+  const by_supplier = Array.isArray(k.by_supplier)
+    ? k.by_supplier
+        .map(parseInvoiceSupplierPeriod)
+        .filter((x): x is InvoiceSupplierPeriod => x != null)
+    : [];
+
+  const by_supplier_open = Array.isArray(inv.by_supplier_open)
+    ? inv.by_supplier_open
+        .map(parseInvoiceSupplierOpen)
+        .filter((x): x is InvoiceSupplierOpen => x != null)
+    : [];
+
+  return {
+    kpis: {
+      issued_count: k.issued_count,
+      issued_total,
+      avg_amount:
+        k.avg_amount == null ? null : asMoneyString(k.avg_amount),
+      paid_count: k.paid_count,
+      paid_total,
+      open_count: k.open_count,
+      open_total,
+      overdue_count: k.overdue_count,
+      overdue_total,
+      vs_previous: parseInvoiceVsPrevious(k.vs_previous),
+      by_supplier,
+    },
+    series,
+    snapshot,
+    aging: parseInvoiceAging(inv.aging),
+    by_supplier_open,
+  };
+}
+
+function parseYearInvoices(raw: unknown): YearInvoices | null {
+  if (!raw || typeof raw !== "object") return null;
+  const inv = raw as Record<string, unknown>;
+  if (!inv.kpis || typeof inv.kpis !== "object") return null;
+  if (!Array.isArray(inv.series)) return null;
+
+  const k = inv.kpis as Record<string, unknown>;
+  const issued_total = asMoneyString(k.issued_total);
+  const paid_total = asMoneyString(k.paid_total);
+  const open_total = asMoneyString(k.open_total);
+  const overdue_total = asMoneyString(k.overdue_total);
+  const avg_issued_per_month = asPct(k.avg_issued_per_month);
+  if (
+    typeof k.issued_count !== "number" ||
+    issued_total == null ||
+    typeof k.paid_count !== "number" ||
+    paid_total == null ||
+    typeof k.open_count !== "number" ||
+    open_total == null ||
+    typeof k.overdue_count !== "number" ||
+    overdue_total == null ||
+    avg_issued_per_month == null
+  ) {
+    return null;
+  }
+
+  const series = inv.series
+    .map((row) => {
+      if (!row || typeof row !== "object") return null;
+      const o = row as Record<string, unknown>;
+      const amount = asMoneyString(o.amount);
+      if (
+        typeof o.month !== "number" ||
+        typeof o.count !== "number" ||
+        amount == null
+      ) {
+        return null;
+      }
+      return { month: o.month, count: o.count, amount };
+    })
+    .filter(
+      (x): x is { month: number; count: number; amount: string } => x != null
+    );
+
+  const snapshot = parseInvoiceSnapshot(inv.snapshot);
+  if (!snapshot) return null;
+
+  const by_supplier = Array.isArray(k.by_supplier)
+    ? k.by_supplier
+        .map(parseInvoiceSupplierPeriod)
+        .filter((x): x is InvoiceSupplierPeriod => x != null)
+    : [];
+
+  const by_supplier_open = Array.isArray(inv.by_supplier_open)
+    ? inv.by_supplier_open
+        .map(parseInvoiceSupplierOpen)
+        .filter((x): x is InvoiceSupplierOpen => x != null)
+    : [];
+
+  return {
+    kpis: {
+      issued_count: k.issued_count,
+      issued_total,
+      avg_amount:
+        k.avg_amount == null ? null : asMoneyString(k.avg_amount),
+      avg_issued_per_month,
+      paid_count: k.paid_count,
+      paid_total,
+      open_count: k.open_count,
+      open_total,
+      overdue_count: k.overdue_count,
+      overdue_total,
+      best_month: parseExtremeMonth(k.best_month),
+      worst_month: parseExtremeMonth(k.worst_month),
+      vs_previous: parseInvoiceVsPrevious(k.vs_previous),
+      by_supplier,
+    },
+    series,
+    snapshot,
+    aging: parseInvoiceAging(inv.aging),
+    by_supplier_open,
+  };
+}
+
 function parseShiftKpi(raw: unknown): ShiftKpi | null {
   if (!raw || typeof raw !== "object") return null;
   const o = raw as Record<string, unknown>;
@@ -190,7 +551,16 @@ function parseCompare(raw: unknown): StatsCompare | null {
   if (qr_total == null || sales_total == null || delta == null) return null;
   const qr_share =
     o.qr_share == null ? null : asPct(o.qr_share) ?? asMoneyString(o.qr_share);
-  return { qr_total, sales_total, delta, qr_share };
+  const invoices_issued = asMoneyString(o.invoices_issued) ?? undefined;
+  const invoices_open_now = asMoneyString(o.invoices_open_now) ?? undefined;
+  return {
+    qr_total,
+    sales_total,
+    delta,
+    qr_share,
+    invoices_issued,
+    invoices_open_now,
+  };
 }
 
 function parseMonthStats(raw: Record<string, unknown>): MonthStats | null {
@@ -280,6 +650,8 @@ function parseMonthStats(raw: Record<string, unknown>): MonthStats | null {
   const compare = parseCompare(raw.compare);
   if (!compare) return null;
 
+  const invoices = parseMonthInvoices(raw.invoices) ?? undefined;
+
   return {
     period: "month",
     year: raw.year,
@@ -321,6 +693,7 @@ function parseMonthStats(raw: Record<string, unknown>): MonthStats | null {
       },
       series: salesSeries,
     },
+    invoices,
     compare,
   };
 }
@@ -396,6 +769,8 @@ function parseYearStats(raw: Record<string, unknown>): YearStats | null {
   const compare = parseCompare(raw.compare);
   if (!compare) return null;
 
+  const invoices = parseYearInvoices(raw.invoices) ?? undefined;
+
   return {
     period: "year",
     year: raw.year,
@@ -431,6 +806,7 @@ function parseYearStats(raw: Record<string, unknown>): YearStats | null {
       },
       series: salesSeries,
     },
+    invoices,
     compare,
   };
 }
