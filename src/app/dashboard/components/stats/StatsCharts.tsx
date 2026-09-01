@@ -21,7 +21,6 @@ function ChartTooltipPortal({ tip }: { tip: TipViewport | null }) {
   if (!tip) return null;
   const pad = 10;
   const vh = typeof window !== "undefined" ? window.innerHeight : 800;
-  // Poco espacio arriba en el viewport → tooltip debajo del cursor; si está muy abajo, encima.
   const showBelow = tip.clientY < 104;
   const showAboveForced = tip.clientY > vh - 72;
   const transform = showAboveForced
@@ -42,7 +41,8 @@ function ChartTooltipPortal({ tip }: { tip: TipViewport | null }) {
         backgroundColor: "var(--background)",
         color: "var(--foreground)",
         transform,
-        boxShadow: "0 8px 24px color-mix(in srgb, var(--foreground) 12%, transparent)",
+        boxShadow:
+          "0 8px 24px color-mix(in srgb, var(--foreground) 12%, transparent)",
       }}
     >
       {tip.label}
@@ -53,30 +53,38 @@ function ChartTooltipPortal({ tip }: { tip: TipViewport | null }) {
 }
 
 type LineProps = {
-  dayLabels: number[];
+  labels: string[];
   counts: number[];
-  formatDayLabel: (day: number) => string;
+  formatPoint: (label: string, count: number) => string;
+  axisLabel?: string;
+  ariaLabel?: string;
 };
 
 export function PaymentsLineChart({
-  dayLabels,
+  labels,
   counts,
-  formatDayLabel,
+  formatPoint,
+  axisLabel = "Período",
+  ariaLabel = "Gráfica de cantidad por período",
 }: LineProps) {
   const gid = useId();
   const [tip, setTip] = useState<TipViewport | null>(null);
 
-  const n = dayLabels.length;
+  const n = labels.length;
   const maxC = Math.max(1, ...counts);
   const innerW = W - PAD_L - PAD_R;
   const innerH = H - PAD_T - PAD_B;
 
   const xAt = (i: number) =>
     n <= 1 ? PAD_L + innerW / 2 : PAD_L + (innerW * i) / (n - 1);
-  const yAt = (c: number) =>
-    PAD_T + innerH - (innerH * c) / maxC;
+  const yAt = (c: number) => PAD_T + innerH - (innerH * c) / maxC;
 
-  const points = counts.map((c, i) => ({ x: xAt(i), y: yAt(c), c, day: dayLabels[i]! }));
+  const points = counts.map((c, i) => ({
+    x: xAt(i),
+    y: yAt(c),
+    c,
+    label: labels[i] ?? String(i + 1),
+  }));
 
   let pathD = "";
   if (points.length === 1) {
@@ -84,7 +92,9 @@ export function PaymentsLineChart({
     const seg = Math.min(48, innerW / 3);
     pathD = `M ${p.x - seg} ${p.y} L ${p.x + seg} ${p.y}`;
   } else {
-    pathD = points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
+    pathD = points
+      .map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`)
+      .join(" ");
   }
 
   return (
@@ -94,12 +104,20 @@ export function PaymentsLineChart({
         viewBox={`0 0 ${W} ${H}`}
         className="h-auto w-full max-w-full"
         role="img"
-        aria-label="Gráfica de cantidad de pagos por día"
+        aria-label={ariaLabel}
       >
         <defs>
           <linearGradient id={`${gid}-lineFill`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--primary-500)" stopOpacity="0.25" />
-            <stop offset="100%" stopColor="var(--primary-500)" stopOpacity="0.02" />
+            <stop
+              offset="0%"
+              stopColor="var(--primary-500)"
+              stopOpacity="0.25"
+            />
+            <stop
+              offset="100%"
+              stopColor="var(--primary-500)"
+              stopOpacity="0.02"
+            />
           </linearGradient>
         </defs>
         {[0, 0.25, 0.5, 0.75, 1].map((t) => {
@@ -140,7 +158,7 @@ export function PaymentsLineChart({
         />
         {points.map((p) => (
           <circle
-            key={p.day}
+            key={p.label}
             cx={p.x}
             cy={p.y}
             r={p.c > 0 ? 5 : 3}
@@ -152,14 +170,14 @@ export function PaymentsLineChart({
               setTip({
                 clientX: e.clientX,
                 clientY: e.clientY,
-                label: `${formatDayLabel(p.day)}: ${p.c} pago(s)`,
+                label: formatPoint(p.label, p.c),
               })
             }
             onMouseMove={(e) =>
               setTip({
                 clientX: e.clientX,
                 clientY: e.clientY,
-                label: `${formatDayLabel(p.day)}: ${p.c} pago(s)`,
+                label: formatPoint(p.label, p.c),
               })
             }
             onMouseLeave={() => setTip(null)}
@@ -173,7 +191,7 @@ export function PaymentsLineChart({
           fillOpacity={0.85}
           fontWeight={600}
         >
-          Día del mes
+          {axisLabel}
         </text>
       </svg>
     </div>
@@ -181,22 +199,24 @@ export function PaymentsLineChart({
 }
 
 type BarProps = {
-  dayLabels: number[];
-  sums: number[];
-  formatMoney: (n: number) => string;
-  formatDayLabel: (day: number) => string;
+  labels: string[];
+  values: number[];
+  formatPoint: (label: string, value: number) => string;
+  axisLabel?: string;
+  ariaLabel?: string;
 };
 
 export function ValueBarChart({
-  dayLabels,
-  sums,
-  formatMoney,
-  formatDayLabel,
+  labels,
+  values,
+  formatPoint,
+  axisLabel = "Período",
+  ariaLabel = "Gráfica de valor por período",
 }: BarProps) {
   const [tip, setTip] = useState<TipViewport | null>(null);
 
-  const n = dayLabels.length;
-  const maxS = Math.max(1, ...sums);
+  const n = labels.length;
+  const maxS = Math.max(1, ...values);
   const innerW = W - PAD_L - PAD_R;
   const innerH = H - PAD_T - PAD_B;
   const gap = 1;
@@ -209,7 +229,7 @@ export function ValueBarChart({
         viewBox={`0 0 ${W} ${H}`}
         className="h-auto w-full max-w-full"
         role="img"
-        aria-label="Gráfica de suma de valores por día"
+        aria-label={ariaLabel}
       >
         {[0, 0.25, 0.5, 0.75, 1].map((t) => {
           const y = PAD_T + innerH * (1 - t);
@@ -226,14 +246,14 @@ export function ValueBarChart({
             />
           );
         })}
-        {sums.map((sum, i) => {
+        {values.map((sum, i) => {
           const h = (innerH * sum) / maxS;
           const x = PAD_L + i * (barW + gap);
           const y = PAD_T + innerH - h;
-          const day = dayLabels[i]!;
+          const label = labels[i] ?? String(i + 1);
           return (
             <rect
-              key={day}
+              key={label}
               x={x}
               y={y}
               width={barW}
@@ -245,14 +265,14 @@ export function ValueBarChart({
                 setTip({
                   clientX: e.clientX,
                   clientY: e.clientY,
-                  label: `${formatDayLabel(day)}: ${formatMoney(sum)}`,
+                  label: formatPoint(label, sum),
                 })
               }
               onMouseMove={(e) =>
                 setTip({
                   clientX: e.clientX,
                   clientY: e.clientY,
-                  label: `${formatDayLabel(day)}: ${formatMoney(sum)}`,
+                  label: formatPoint(label, sum),
                 })
               }
               onMouseLeave={() => setTip(null)}
@@ -267,7 +287,7 @@ export function ValueBarChart({
           fillOpacity={0.85}
           fontWeight={600}
         >
-          Día del mes
+          {axisLabel}
         </text>
       </svg>
     </div>
