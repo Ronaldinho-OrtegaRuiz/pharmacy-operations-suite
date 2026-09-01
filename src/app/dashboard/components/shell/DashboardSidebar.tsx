@@ -99,6 +99,38 @@ function IconSettings() {
   );
 }
 
+function IconInvoice() {
+  return (
+    <svg
+      width="22"
+      height="22"
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <path
+        d="M7 3.75h7.5L19 8.25v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1v-15a1 1 0 0 1 1-1Z"
+        stroke="currentColor"
+        strokeWidth="1.9"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M14.5 3.75V8.5H19"
+        stroke="currentColor"
+        strokeWidth="1.9"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M9 12h6M9 15.5h6M9 8.5h2.5"
+        stroke="currentColor"
+        strokeWidth="1.9"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 type NavItem = {
   href: string;
   label: string;
@@ -122,6 +154,7 @@ export default function DashboardSidebar({
     const all: NavItem[] = [
       { href: "/dashboard", label: "Pagos QR", icon: <IconQr /> },
       { href: "/dashboard/sales", label: "Ventas", icon: <IconPeso /> },
+      { href: "/dashboard/facturas", label: "Facturas", icon: <IconInvoice /> },
       { href: "/dashboard/stats", label: "Estadísticas", icon: <IconStats /> },
       {
         href: "/dashboard/settings",
