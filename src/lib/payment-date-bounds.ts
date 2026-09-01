@@ -17,6 +17,29 @@ export function firstYmdOfMonth(ymd: string): string {
   return m ? `${m[1]}-01` : ymd;
 }
 
+/** Último día del mes civil de un YYYY-MM-DD (sin cambiar de zona). */
+export function lastYmdOfMonth(ymd: string): string {
+  const m = ymd.trim().match(/^(\d{4})-(\d{2})/);
+  if (!m) return ymd;
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  if (!Number.isFinite(y) || !Number.isFinite(mo) || mo < 1 || mo > 12) {
+    return ymd;
+  }
+  const last = new Date(Date.UTC(y, mo, 0)).getUTCDate();
+  return `${m[1]}-${m[2]}-${String(last).padStart(2, "0")}`;
+}
+
+/** Primer y último día del mes (year + month 1–12). */
+export function ymdBoundsForMonth(
+  year: number,
+  month: number
+): { from: string; to: string } {
+  const mm = String(month).padStart(2, "0");
+  const from = `${year}-${mm}-01`;
+  return { from, to: lastYmdOfMonth(from) };
+}
+
 /** YYYY-MM-DD del instante en la zona. */
 export function todayYmdInTz(timeZone: string = PAYMENTS_DATE_TIMEZONE): string {
   const d = new Date();

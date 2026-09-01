@@ -5,9 +5,9 @@ import { getAuthUsername, removeToken } from "@/lib/auth-storage";
 import { formatValorCOPTable } from "@/lib/money-format";
 import {
   clampYmd,
-  firstYmdOfMonth,
   nonAdminDateBounds,
   todayYmdInTz,
+  ymdBoundsForMonth,
 } from "@/lib/payment-date-bounds";
 import {
   apiErrorMessage,
@@ -21,13 +21,36 @@ import {
 import { canAccessStats } from "@/lib/stats-access";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import DateFilterControls, {
-  type PaymentDateMode,
-} from "../payments/DateFilterControls";
+import DateFilterControls from "../payments/DateFilterControls";
 import StoreBadges, { DROGUERIA_RICKY_ID } from "../payments/StoreBadges";
 import DaySalesCard from "./DaySalesCard";
 import SalesMonthCalendar from "./SalesMonthCalendar";
 import SalesViewToggle, { type SalesAdminView } from "./SalesViewToggle";
+
+const MONTH_NAMES_ES = [
+  "Enero",
+  "Febrero",
+  "Marzo",
+  "Abril",
+  "Mayo",
+  "Junio",
+  "Julio",
+  "Agosto",
+  "Septiembre",
+  "Octubre",
+  "Noviembre",
+  "Diciembre",
+] as const;
+
+function monthFromYmd(ymd: string): number {
+  const m = Number(ymd.slice(5, 7));
+  return m >= 1 && m <= 12 ? m : new Date().getMonth() + 1;
+}
+
+function yearFromYmd(ymd: string): number {
+  const y = Number(ymd.slice(0, 4));
+  return Number.isFinite(y) ? y : new Date().getFullYear();
+}
 
 export default function SalesPageClient() {
   const router = useRouter();
@@ -37,10 +60,10 @@ export default function SalesPageClient() {
     undefined
   );
   const [drogueriaId, setDrogueriaId] = useState(DROGUERIA_RICKY_ID);
-  const [dateMode, setDateMode] = useState<PaymentDateMode>("especifica");
   const [specificDate, setSpecificDate] = useState(() => todayYmdInTz());
-  const [rangeFrom, setRangeFrom] = useState(() => todayYmdInTz());
-  const [rangeTo, setRangeTo] = useState(() => todayYmdInTz());
+  const [selectedMonth, setSelectedMonth] = useState(() =>
+    monthFromYmd(todayYmdInTz())
+  );
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -55,16 +78,10 @@ export default function SalesPageClient() {
   useEffect(() => {
     const user = getAuthUsername();
     if (canAccessStats(user)) {
-      const today = todayYmdInTz();
-      setDateMode("rango");
-      setRangeFrom(firstYmdOfMonth(today));
-      setRangeTo(today);
+      setSelectedMonth(monthFromYmd(todayYmdInTz()));
     } else if (user) {
       const { min, max } = nonAdminDateBounds();
-      setDateMode("especifica");
       setSpecificDate((s) => clampYmd(s || max, min, max));
-      setRangeFrom((r) => clampYmd(r || max, min, max));
-      setRangeTo((r) => clampYmd(r || max, min, max));
     }
     setSessionUser(user);
   }, []);
@@ -78,12 +95,11 @@ export default function SalesPageClient() {
   const load = useCallback(async () => {
     let from = specificDate;
     let to = specificDate;
-    if (dateMode === "rango") {
-      from = rangeFrom;
-      to = rangeTo;
-      if (from && to && from > to) {
-        [from, to] = [to, from];
-      }
+    if (isAdmin) {
+      const year = yearFromYmd(todayYmdInTz());
+      const bounds = ymdBoundsForMonth(year, selectedMonth);
+      from = bounds.from;
+      to = bounds.to;
     }
     if (restrictDates) {
       const bounds = nonAdminDateBounds();
@@ -144,12 +160,11 @@ export default function SalesPageClient() {
       setLoading(false);
     }
   }, [
-    dateMode,
     drogueriaId,
     expireAuth,
-    rangeFrom,
-    rangeTo,
+    isAdmin,
     restrictDates,
+    selectedMonth,
     specificDate,
   ]);
 
@@ -204,37 +219,52 @@ export default function SalesPageClient() {
         />
       </div>
 
-      <div className="mt-6 flex w-full max-w-4xl flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div className="mt-6 flex w-full max-w-4xl flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0 flex-1">
           {sessionUser !== undefined ? (
-            <DateFilterControls
-              mode={dateMode}
-              onModeChange={(mode) => {
-                setDateMode(mode);
-                const t = todayYmdInTz();
-                if (mode === "especifica") setSpecificDate(t);
-                if (mode === "rango") {
-                  setRangeFrom(isAdmin ? firstYmdOfMonth(t) : t);
-                  setRangeTo(t);
-                }
-              }}
-              specificDate={specificDate}
-              onSpecificDateChange={(v) => {
-                if (restrictDates) {
+            isAdmin ? (
+              <label
+                className="inline-flex items-center gap-2 text-sm font-semibold"
+                style={{ color: "var(--primary-800)" }}
+              >
+                Mes
+                <select
+                  value={selectedMonth}
+                  disabled={loading}
+                  onChange={(e) => setSelectedMonth(Number(e.target.value))}
+                  className="h-9 min-w-[7.5rem] cursor-pointer rounded-lg border-2 px-2 text-sm font-semibold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[color:var(--primary-400)] disabled:cursor-not-allowed disabled:opacity-60"
+                  style={{
+                    borderColor: "var(--primary-400)",
+                    color: "var(--foreground)",
+                    backgroundColor:
+                      "color-mix(in srgb, var(--primary-600) 14%, var(--background))",
+                  }}
+                >
+                  {MONTH_NAMES_ES.map((name, i) => (
+                    <option key={name} value={i + 1}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <DateFilterControls
+                mode="especifica"
+                onModeChange={() => {}}
+                specificDate={specificDate}
+                onSpecificDateChange={(v) => {
                   const { min, max } = nonAdminDateBounds();
                   setSpecificDate(clampYmd(v, min, max));
-                } else {
-                  setSpecificDate(v);
-                }
-              }}
-              rangeFrom={rangeFrom}
-              rangeTo={rangeTo}
-              onRangeFromChange={setRangeFrom}
-              onRangeToChange={setRangeTo}
-              disabled={loading}
-              fullDateAccess={!restrictDates}
-              dateBounds={restrictDates ? nonAdminDateBounds() : undefined}
-            />
+                }}
+                rangeFrom={specificDate}
+                rangeTo={specificDate}
+                onRangeFromChange={() => {}}
+                onRangeToChange={() => {}}
+                disabled={loading}
+                fullDateAccess={false}
+                dateBounds={nonAdminDateBounds()}
+              />
+            )
           ) : null}
         </div>
         <button
