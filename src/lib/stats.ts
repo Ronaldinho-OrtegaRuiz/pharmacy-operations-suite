@@ -99,7 +99,13 @@ export type ShiftKpi = {
   total: string;
   avg: string | null;
   filled_days: number;
+  best_day?: ExtremeDay;
+  worst_day?: ExtremeDay;
+  best_month?: ExtremeMonth;
+  worst_month?: ExtremeMonth;
 };
+
+export type ShiftExtreme = { shift_no: number; value: string } | null;
 
 export type StatsCompare = {
   qr_total: string;
@@ -142,6 +148,8 @@ export type MonthStats = {
       days_filled: number;
       days_empty: number;
       by_shift: ShiftKpi[];
+      best_shift?: ShiftExtreme;
+      worst_shift?: ShiftExtreme;
       vs_previous: VsPrevious;
     };
     series: {
@@ -181,6 +189,8 @@ export type YearStats = {
       best_month: ExtremeMonth;
       worst_month: ExtremeMonth;
       by_shift: ShiftKpi[];
+      best_shift?: ShiftExtreme;
+      worst_shift?: ShiftExtreme;
       vs_previous: VsPrevious;
     };
     series: { month: number; value: string }[];
@@ -525,20 +535,33 @@ function parseYearInvoices(raw: unknown): YearInvoices | null {
   };
 }
 
+function parseShiftExtreme(raw: unknown): ShiftExtreme {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  if (typeof o.shift_no !== "number") return null;
+  const value = asMoneyString(o.value);
+  if (value == null) return null;
+  return { shift_no: o.shift_no, value };
+}
+
 function parseShiftKpi(raw: unknown): ShiftKpi | null {
   if (!raw || typeof raw !== "object") return null;
   const o = raw as Record<string, unknown>;
   if (typeof o.shift_no !== "number") return null;
   const total = asMoneyString(o.total);
   if (total == null) return null;
-  const avg =
-    o.avg == null ? null : asMoneyString(o.avg);
+  const avg = o.avg == null ? null : asMoneyString(o.avg);
   if (o.avg != null && avg == null) return null;
   return {
     shift_no: o.shift_no,
     total,
     avg,
     filled_days: typeof o.filled_days === "number" ? o.filled_days : 0,
+    best_day: "best_day" in o ? parseExtremeDay(o.best_day) : undefined,
+    worst_day: "worst_day" in o ? parseExtremeDay(o.worst_day) : undefined,
+    best_month: "best_month" in o ? parseExtremeMonth(o.best_month) : undefined,
+    worst_month:
+      "worst_month" in o ? parseExtremeMonth(o.worst_month) : undefined,
   };
 }
 
@@ -689,6 +712,8 @@ function parseMonthStats(raw: Record<string, unknown>): MonthStats | null {
         days_filled: typeof sk.days_filled === "number" ? sk.days_filled : 0,
         days_empty: typeof sk.days_empty === "number" ? sk.days_empty : 0,
         by_shift,
+        best_shift: parseShiftExtreme(sk.best_shift),
+        worst_shift: parseShiftExtreme(sk.worst_shift),
         vs_previous: parseVsPrevious(sk.vs_previous),
       },
       series: salesSeries,
@@ -802,6 +827,8 @@ function parseYearStats(raw: Record<string, unknown>): YearStats | null {
         best_month: parseExtremeMonth(sk.best_month),
         worst_month: parseExtremeMonth(sk.worst_month),
         by_shift,
+        best_shift: parseShiftExtreme(sk.best_shift),
+        worst_shift: parseShiftExtreme(sk.worst_shift),
         vs_previous: parseVsPrevious(sk.vs_previous),
       },
       series: salesSeries,

@@ -120,11 +120,15 @@ function buildInvoicesQuery(params: InvoicesQueryParams): string {
   return `?${sp.toString()}`;
 }
 
-/** GET /suppliers — catálogo global. */
-export async function getSuppliers(): Promise<
-  { ok: true; data: Supplier[] } | ApiFailure
-> {
-  const url = `${getApiBaseUrl()}/suppliers`;
+/** GET /suppliers — catálogo global. `q` = contains case-insensitive. */
+export async function getSuppliers(params?: {
+  q?: string;
+}): Promise<{ ok: true; data: Supplier[] } | ApiFailure> {
+  const sp = new URLSearchParams();
+  const q = params?.q?.trim();
+  if (q) sp.set("q", q);
+  const qs = sp.toString();
+  const url = `${getApiBaseUrl()}/suppliers${qs ? `?${qs}` : ""}`;
   const res = await fetchWithAuth(url, { method: "GET" });
   let body: unknown = [];
   try {
@@ -185,16 +189,29 @@ export async function createInvoices(params: {
   };
 }
 
-/** PATCH /invoices/{id} — pending | paid (nunca overdue). */
-export async function patchInvoiceStatus(params: {
+/** PATCH /invoices/{id} — status y/o amount (mínimo un campo; nunca overdue). */
+export async function patchInvoice(params: {
   id: number;
-  status: "pending" | "paid";
+  status?: "pending" | "paid";
+  amount?: string;
 }): Promise<{ ok: true; data: Invoice } | ApiFailure> {
+  const payload: { status?: "pending" | "paid"; amount?: string } = {};
+  if (params.status != null) payload.status = params.status;
+  if (params.amount != null && params.amount.trim() !== "") {
+    payload.amount = params.amount.trim();
+  }
+  if (payload.status == null && payload.amount == null) {
+    return {
+      ok: false,
+      status: 422,
+      body: { detail: "Envía status y/o amount." },
+    };
+  }
   const url = `${getApiBaseUrl()}/invoices/${params.id}`;
   const res = await fetchWithAuth(url, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ status: params.status }),
+    body: JSON.stringify(payload),
   });
   let body: unknown = {};
   try {
@@ -206,4 +223,12 @@ export async function patchInvoiceStatus(params: {
   const data = parseInvoice(body);
   if (!data) return { ok: false, status: res.status, body };
   return { ok: true, data };
+}
+
+/** @deprecated Usa patchInvoice. */
+export async function patchInvoiceStatus(params: {
+  id: number;
+  status: "pending" | "paid";
+}): Promise<{ ok: true; data: Invoice } | ApiFailure> {
+  return patchInvoice(params);
 }

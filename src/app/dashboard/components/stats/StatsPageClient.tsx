@@ -15,7 +15,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import StoreBadges, { DROGUERIA_RICKY_ID } from "../payments/StoreBadges";
 import StatsInvoicesSection from "./StatsInvoicesSection";
-import { PaymentsLineChart, ValueBarChart } from "./StatsCharts";
+import { PaymentsLineChart, StackedShiftBarChart, ValueBarChart } from "./StatsCharts";
 
 const MONTH_NAMES_ES = [
   "Enero",
@@ -576,7 +576,7 @@ export default function StatsPageClient() {
           {metric === "sales" && data.period === "month" ? (
             <ChartCard
               title={`${periodTitle} — Ventas (caja) por día`}
-              hint="Pasa el mouse sobre una barra: total del día. Mientras no llenen turnos, puede ir en ceros."
+              hint="Cada barra se divide por turnos. Pasa el mouse por un bloque: valor de ese turno y total del día."
               kpis={
                 <>
                   <KpiChip
@@ -603,26 +603,55 @@ export default function StatsPageClient() {
                     label="vs período anterior:"
                     value={formatPct(data.sales.kpis.vs_previous.value_pct)}
                   />
+                  <KpiChip
+                    label="Mejor turno:"
+                    value={
+                      data.sales.kpis.best_shift
+                        ? `T${data.sales.kpis.best_shift.shift_no} (${moneyFromApi(data.sales.kpis.best_shift.value)})`
+                        : "—"
+                    }
+                  />
+                  <KpiChip
+                    label="Peor turno:"
+                    value={
+                      data.sales.kpis.worst_shift
+                        ? `T${data.sales.kpis.worst_shift.shift_no} (${moneyFromApi(data.sales.kpis.worst_shift.value)})`
+                        : "—"
+                    }
+                  />
                   {data.sales.kpis.by_shift.map((s) => (
                     <KpiChip
                       key={s.shift_no}
                       label={`Turno ${s.shift_no}:`}
                       value={`${moneyFromApi(s.total)}${
                         s.avg != null ? ` · prom. ${moneyFromApi(s.avg)}` : ""
+                      }${
+                        s.best_day
+                          ? ` · mejor ${formatExtremeDay(s.best_day)}`
+                          : ""
                       }`}
                     />
                   ))}
                 </>
               }
             >
-              <ValueBarChart
-                labels={data.sales.series.map((d) => d.date)}
-                values={data.sales.series.map((d) => numFromApi(d.total))}
-                axisLabel="Día del mes"
-                ariaLabel="Gráfica de ventas de caja por día"
-                formatPoint={(label, value) =>
-                  `${formatYmdDisplay(label)}: ${moneyNum(value)}`
-                }
+              <StackedShiftBarChart
+                shiftCount={data.shift_count}
+                formatDayLabel={formatYmdDisplay}
+                formatMoney={moneyNum}
+                days={data.sales.series.map((d) => ({
+                  label: d.date,
+                  total: numFromApi(d.total),
+                  shifts: Array.from({ length: data.shift_count }, (_, i) => {
+                    const shiftNo = i + 1;
+                    const sh = d.shifts.find((s) => s.shift_no === shiftNo);
+                    return {
+                      shift_no: shiftNo,
+                      amount:
+                        sh?.amount != null ? numFromApi(sh.amount) : null,
+                    };
+                  }),
+                }))}
               />
             </ChartCard>
           ) : null}
@@ -630,7 +659,7 @@ export default function StatsPageClient() {
           {metric === "sales" && data.period === "year" ? (
             <ChartCard
               title={`${periodTitle} — Ventas (caja) por mes`}
-              hint="Pasa el mouse sobre una barra: total del mes."
+              hint="Las barras muestran el total del mes. El detalle por turno está en las tarjetas."
               kpis={
                 <>
                   <KpiChip
@@ -653,11 +682,31 @@ export default function StatsPageClient() {
                     label="vs año anterior:"
                     value={formatPct(data.sales.kpis.vs_previous.value_pct)}
                   />
+                  <KpiChip
+                    label="Mejor turno:"
+                    value={
+                      data.sales.kpis.best_shift
+                        ? `T${data.sales.kpis.best_shift.shift_no} (${moneyFromApi(data.sales.kpis.best_shift.value)})`
+                        : "—"
+                    }
+                  />
+                  <KpiChip
+                    label="Peor turno:"
+                    value={
+                      data.sales.kpis.worst_shift
+                        ? `T${data.sales.kpis.worst_shift.shift_no} (${moneyFromApi(data.sales.kpis.worst_shift.value)})`
+                        : "—"
+                    }
+                  />
                   {data.sales.kpis.by_shift.map((s) => (
                     <KpiChip
                       key={s.shift_no}
                       label={`Turno ${s.shift_no}:`}
-                      value={moneyFromApi(s.total)}
+                      value={`${moneyFromApi(s.total)}${
+                        s.best_month
+                          ? ` · mejor ${formatExtremeMonth(s.best_month)}`
+                          : ""
+                      }`}
                     />
                   ))}
                 </>

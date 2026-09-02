@@ -293,3 +293,175 @@ export function ValueBarChart({
     </div>
   );
 }
+
+const SHIFT_FILLS = [
+  "var(--primary-700)",
+  "var(--primary-500)",
+  "var(--primary-400)",
+  "var(--primary-300)",
+  "var(--primary-600)",
+  "var(--primary-200)",
+] as const;
+
+export type StackedDayBar = {
+  label: string;
+  total: number;
+  shifts: { shift_no: number; amount: number | null }[];
+};
+
+type StackedProps = {
+  days: StackedDayBar[];
+  shiftCount: number;
+  formatDayLabel: (label: string) => string;
+  formatMoney: (n: number) => string;
+  axisLabel?: string;
+  ariaLabel?: string;
+};
+
+/** Barras apiladas: un segmento por turno; hover = valor del turno + total del día. */
+export function StackedShiftBarChart({
+  days,
+  shiftCount,
+  formatDayLabel,
+  formatMoney,
+  axisLabel = "Día del mes",
+  ariaLabel = "Gráfica de ventas por turno apiladas",
+}: StackedProps) {
+  const [tip, setTip] = useState<TipViewport | null>(null);
+
+  const n = days.length;
+  const totals = days.map((d) => Math.max(0, d.total));
+  const maxS = Math.max(1, ...totals);
+  const innerW = W - PAD_L - PAD_R;
+  const innerH = H - PAD_T - PAD_B;
+  const gap = 1;
+  const barW = n > 0 ? Math.max(2, (innerW - gap * (n - 1)) / n) : 0;
+
+  return (
+    <div className="relative w-full min-w-0">
+      <ChartTooltipPortal tip={tip} />
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        className="h-auto w-full max-w-full"
+        role="img"
+        aria-label={ariaLabel}
+      >
+        {[0, 0.25, 0.5, 0.75, 1].map((t) => {
+          const y = PAD_T + innerH * (1 - t);
+          return (
+            <line
+              key={t}
+              x1={PAD_L}
+              y1={y}
+              x2={PAD_L + innerW}
+              y2={y}
+              stroke="var(--primary-200)"
+              strokeOpacity={0.85}
+              strokeWidth={1}
+            />
+          );
+        })}
+        {days.map((day, i) => {
+          const x = PAD_L + i * (barW + gap);
+          let yBottom = PAD_T + innerH;
+          const segments: {
+            shift_no: number;
+            amount: number;
+            y: number;
+            h: number;
+            fill: string;
+          }[] = [];
+
+          for (let s = 1; s <= shiftCount; s++) {
+            const sh = day.shifts.find((x) => x.shift_no === s);
+            const amount = sh?.amount != null && sh.amount > 0 ? sh.amount : 0;
+            if (amount <= 0) continue;
+            const h = (innerH * amount) / maxS;
+            const y = yBottom - h;
+            segments.push({
+              shift_no: s,
+              amount,
+              y,
+              h: Math.max(h, 2),
+              fill: SHIFT_FILLS[(s - 1) % SHIFT_FILLS.length]!,
+            });
+            yBottom = y;
+          }
+
+          if (segments.length === 0) {
+            return (
+              <rect
+                key={day.label}
+                x={x}
+                y={PAD_T + innerH - 2}
+                width={barW}
+                height={2}
+                rx={1}
+                fill="var(--primary-100)"
+              />
+            );
+          }
+
+          return (
+            <g key={day.label}>
+              {segments.map((seg) => (
+                <rect
+                  key={`${day.label}-t${seg.shift_no}`}
+                  x={x}
+                  y={seg.y}
+                  width={barW}
+                  height={seg.h}
+                  fill={seg.fill}
+                  className="cursor-pointer"
+                  onMouseEnter={(e) =>
+                    setTip({
+                      clientX: e.clientX,
+                      clientY: e.clientY,
+                      label: `${formatDayLabel(day.label)} · Turno ${seg.shift_no}: ${formatMoney(seg.amount)} · Total día: ${formatMoney(day.total)}`,
+                    })
+                  }
+                  onMouseMove={(e) =>
+                    setTip({
+                      clientX: e.clientX,
+                      clientY: e.clientY,
+                      label: `${formatDayLabel(day.label)} · Turno ${seg.shift_no}: ${formatMoney(seg.amount)} · Total día: ${formatMoney(day.total)}`,
+                    })
+                  }
+                  onMouseLeave={() => setTip(null)}
+                />
+              ))}
+            </g>
+          );
+        })}
+        <text
+          x={PAD_L}
+          y={H - 6}
+          fontSize={11}
+          fill="var(--foreground)"
+          fillOpacity={0.85}
+          fontWeight={600}
+        >
+          {axisLabel}
+        </text>
+      </svg>
+      <div className="mt-2 flex flex-wrap gap-3 px-1">
+        {Array.from({ length: shiftCount }, (_, i) => (
+          <span
+            key={i + 1}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold"
+            style={{ color: "var(--primary-800)" }}
+          >
+            <span
+              className="inline-block h-2.5 w-2.5 rounded-sm"
+              style={{
+                backgroundColor: SHIFT_FILLS[i % SHIFT_FILLS.length],
+              }}
+              aria-hidden
+            />
+            Turno {i + 1}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}

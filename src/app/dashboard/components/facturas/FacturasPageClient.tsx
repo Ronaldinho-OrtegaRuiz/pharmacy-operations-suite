@@ -8,11 +8,9 @@ import {
   apiErrorMessage,
   createInvoices,
   getInvoices,
-  getSuppliers,
-  patchInvoiceStatus,
+  patchInvoice,
   type Invoice,
   type InvoiceStatus,
-  type Supplier,
 } from "@/lib/invoices";
 import { useRouter } from "next/navigation";
 import {
@@ -22,6 +20,7 @@ import {
   type FormEvent,
 } from "react";
 import StoreBadges, { DROGUERIA_RICKY_ID } from "../payments/StoreBadges";
+import SupplierTypeahead from "./SupplierTypeahead";
 
 const inputClass =
   "h-9 w-full rounded-lg border-2 px-2 text-sm font-semibold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[color:var(--primary-400)] disabled:opacity-60";
@@ -77,10 +76,15 @@ function statusColors(status: InvoiceStatus): {
   };
 }
 
+/** Estado editable: overdue se trata como pending al editar. */
+function editableStatus(status: InvoiceStatus): "pending" | "paid" {
+  return status === "paid" ? "paid" : "pending";
+}
+
 type DraftForm = {
-  supplierMode: "existing" | "new";
-  supplier_id: string;
-  supplier: string;
+  supplier_id: number | "";
+  supplier_label: string;
+  supplier_new: string;
   invoice_number: string;
   invoice_date: string;
   due_date: string;
@@ -91,9 +95,9 @@ type DraftForm = {
 function emptyDraft(): DraftForm {
   const today = todayYmdInTz();
   return {
-    supplierMode: "existing",
     supplier_id: "",
-    supplier: "",
+    supplier_label: "",
+    supplier_new: "",
     invoice_number: "",
     invoice_date: today,
     due_date: today,
@@ -102,6 +106,11 @@ function emptyDraft(): DraftForm {
   };
 }
 
+type EditDraft = {
+  amount: string;
+  status: "pending" | "paid";
+};
+
 export default function FacturasPageClient() {
   const router = useRouter();
   const toast = useToast();
@@ -109,10 +118,10 @@ export default function FacturasPageClient() {
   const [drogueriaId, setDrogueriaId] = useState(DROGUERIA_RICKY_ID);
   const [statusFilter, setStatusFilter] = useState<"" | InvoiceStatus>("");
   const [supplierFilter, setSupplierFilter] = useState<number | "">("");
+  const [supplierFilterLabel, setSupplierFilterLabel] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [items, setItems] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -122,27 +131,14 @@ export default function FacturasPageClient() {
   const [draft, setDraft] = useState<DraftForm>(emptyDraft);
   const [creating, setCreating] = useState(false);
 
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editDraft, setEditDraft] = useState<EditDraft | null>(null);
+
   const expireAuth = useCallback(() => {
     removeToken();
     toast.show("Sesión expirada. Inicia sesión de nuevo.", "error");
     router.replace("/login");
   }, [router, toast]);
-
-  const loadSuppliers = useCallback(async () => {
-    try {
-      const res = await getSuppliers();
-      if (!res.ok) {
-        if (res.status === 401) {
-          expireAuth();
-          return;
-        }
-        return;
-      }
-      setSuppliers(res.data);
-    } catch {
-      // listado opcional; no bloquea facturas
-    }
-  }, [expireAuth]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -183,25 +179,53 @@ export default function FacturasPageClient() {
   ]);
 
   useEffect(() => {
-    void loadSuppliers();
-  }, [loadSuppliers]);
-
-  useEffect(() => {
     void load();
   }, [load]);
 
-  const markPaid = async (invoice: Invoice) => {
-    if (invoice.status === "paid") return;
-    setSavingId(invoice.id);
+  const startEdit = (inv: Invoice) => {
+    setEditingId(inv.id);
+    setEditDraft({
+      amount: inv.amount,
+      status: editableStatus(inv.status),
+    });
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditDraft(null);
+  };
+
+  const saveEdit = async (inv: Invoice) => {
+    if (!editDraft) return;
+    const amount = editDraft.amount.trim();
+    if (!amount) {
+      toast.show("El monto no puede quedar vacío.", "error");
+      return;
+    }
+    const payload: {
+      id: number;
+      status?: "pending" | "paid";
+      amount?: string;
+    } = { id: inv.id };
+    if (amount !== inv.amount) payload.amount = amount;
+    const nextStatus = editDraft.status;
+    const prevEditable = editableStatus(inv.status);
+    if (nextStatus !== prevEditable) payload.status = nextStatus;
+    if (payload.amount == null && payload.status == null) {
+      cancelEdit();
+      return;
+    }
+
+    setSavingId(inv.id);
     try {
-      const res = await patchInvoiceStatus({ id: invoice.id, status: "paid" });
+      const res = await patchInvoice(payload);
       if (!res.ok) {
         if (res.status === 401) {
           expireAuth();
           return;
         }
         toast.show(
-          apiErrorMessage(res.body, "No se pudo marcar como pagada."),
+          apiErrorMessage(res.body, "No se pudo actualizar la factura."),
           "error"
         );
         return;
@@ -209,8 +233,8 @@ export default function FacturasPageClient() {
       setItems((prev) =>
         prev.map((it) => (it.id === res.data.id ? res.data : it))
       );
-      toast.show(`Factura ${res.data.invoice_number} marcada como pagada.`, "success");
-      void loadSuppliers();
+      toast.show(`Factura ${res.data.invoice_number} actualizada.`, "success");
+      cancelEdit();
     } catch {
       toast.show("Error de red al actualizar la factura.", "error");
     } finally {
@@ -226,35 +250,32 @@ export default function FacturasPageClient() {
       toast.show("Completa número, fechas y monto.", "error");
       return;
     }
-    if (draft.supplierMode === "existing" && !draft.supplier_id) {
-      toast.show("Elige un proveedor o crea uno nuevo.", "error");
-      return;
-    }
-    if (draft.supplierMode === "new" && !draft.supplier.trim()) {
-      toast.show("Escribe el nombre del proveedor.", "error");
+    const hasExisting = draft.supplier_id !== "";
+    const newName = draft.supplier_new.trim() || draft.supplier_label.trim();
+    if (!hasExisting && !newName) {
+      toast.show("Elige o escribe un proveedor.", "error");
       return;
     }
 
     setCreating(true);
     try {
-      const item =
-        draft.supplierMode === "existing"
-          ? {
-              supplier_id: Number(draft.supplier_id),
-              invoice_number: number,
-              invoice_date: draft.invoice_date,
-              due_date: draft.due_date,
-              amount,
-              status: draft.status,
-            }
-          : {
-              supplier: draft.supplier.trim(),
-              invoice_number: number,
-              invoice_date: draft.invoice_date,
-              due_date: draft.due_date,
-              amount,
-              status: draft.status,
-            };
+      const item = hasExisting
+        ? {
+            supplier_id: Number(draft.supplier_id),
+            invoice_number: number,
+            invoice_date: draft.invoice_date,
+            due_date: draft.due_date,
+            amount,
+            status: draft.status,
+          }
+        : {
+            supplier: newName,
+            invoice_number: number,
+            invoice_date: draft.invoice_date,
+            due_date: draft.due_date,
+            amount,
+            status: draft.status,
+          };
 
       const res = await createInvoices({
         drogueria_id: drogueriaId,
@@ -279,7 +300,6 @@ export default function FacturasPageClient() {
       );
       setDraft(emptyDraft());
       setShowForm(false);
-      await loadSuppliers();
       await load();
     } catch {
       toast.show("Error de red al crear la factura.", "error");
@@ -351,30 +371,23 @@ export default function FacturasPageClient() {
         </div>
 
         <div className="flex flex-wrap items-end gap-3">
-          <label
-            className="flex flex-col gap-1 text-sm font-semibold"
-            style={{ color: "var(--primary-800)" }}
-          >
-            Proveedor
-            <select
-              value={supplierFilter === "" ? "" : String(supplierFilter)}
-              disabled={loading}
-              onChange={(e) =>
-                setSupplierFilter(
-                  e.target.value === "" ? "" : Number(e.target.value)
-                )
+          <SupplierTypeahead
+            className="min-w-[14rem] flex-1 sm:max-w-xs"
+            valueId={supplierFilter}
+            valueLabel={supplierFilterLabel}
+            disabled={loading}
+            placeholder="Filtrar proveedor…"
+            onAuthExpired={expireAuth}
+            onSelect={(s) => {
+              if (!s) {
+                setSupplierFilter("");
+                setSupplierFilterLabel("");
+                return;
               }
-              className={`${inputClass} min-w-[12rem]`}
-              style={inputStyle}
-            >
-              <option value="">Todos</option>
-              {suppliers.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          </label>
+              setSupplierFilter(s.id);
+              setSupplierFilterLabel(s.name);
+            }}
+          />
           <label
             className="flex flex-col gap-1 text-sm font-semibold"
             style={{ color: "var(--primary-800)" }}
@@ -449,94 +462,39 @@ export default function FacturasPageClient() {
             Registrar factura
           </h2>
           <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="sm:col-span-2 flex flex-wrap gap-2">
-              <button
-                type="button"
-                disabled={creating}
-                onClick={() =>
-                  setDraft((d) => ({ ...d, supplierMode: "existing" }))
+            <SupplierTypeahead
+              className="sm:col-span-2"
+              valueId={draft.supplier_id}
+              valueLabel={draft.supplier_label || draft.supplier_new}
+              disabled={creating}
+              allowCreate
+              placeholder="Buscar o escribir proveedor…"
+              onAuthExpired={expireAuth}
+              onSelect={(s) => {
+                if (!s) {
+                  setDraft((d) => ({
+                    ...d,
+                    supplier_id: "",
+                    supplier_label: "",
+                  }));
+                  return;
                 }
-                className="rounded-lg px-3 py-1.5 text-xs font-semibold"
-                style={{
-                  backgroundColor:
-                    draft.supplierMode === "existing"
-                      ? "var(--primary-600)"
-                      : "transparent",
-                  color:
-                    draft.supplierMode === "existing"
-                      ? "white"
-                      : "var(--primary-700)",
-                  border: "1px solid var(--primary-200)",
-                }}
-              >
-                Proveedor existente
-              </button>
-              <button
-                type="button"
-                disabled={creating}
-                onClick={() =>
-                  setDraft((d) => ({ ...d, supplierMode: "new" }))
-                }
-                className="rounded-lg px-3 py-1.5 text-xs font-semibold"
-                style={{
-                  backgroundColor:
-                    draft.supplierMode === "new"
-                      ? "var(--primary-600)"
-                      : "transparent",
-                  color:
-                    draft.supplierMode === "new"
-                      ? "white"
-                      : "var(--primary-700)",
-                  border: "1px solid var(--primary-200)",
-                }}
-              >
-                Nuevo proveedor
-              </button>
-            </div>
-
-            {draft.supplierMode === "existing" ? (
-              <label
-                className="flex flex-col gap-1 text-sm font-semibold sm:col-span-2"
-                style={{ color: "var(--primary-800)" }}
-              >
-                Proveedor
-                <select
-                  required
-                  value={draft.supplier_id}
-                  disabled={creating}
-                  onChange={(e) =>
-                    setDraft((d) => ({ ...d, supplier_id: e.target.value }))
-                  }
-                  className={inputClass}
-                  style={inputStyle}
-                >
-                  <option value="">Selecciona…</option>
-                  {suppliers.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : (
-              <label
-                className="flex flex-col gap-1 text-sm font-semibold sm:col-span-2"
-                style={{ color: "var(--primary-800)" }}
-              >
-                Nombre del proveedor
-                <input
-                  required
-                  value={draft.supplier}
-                  disabled={creating}
-                  onChange={(e) =>
-                    setDraft((d) => ({ ...d, supplier: e.target.value }))
-                  }
-                  className={inputClass}
-                  style={inputStyle}
-                  placeholder="Distribuidora Norte"
-                />
-              </label>
-            )}
+                setDraft((d) => ({
+                  ...d,
+                  supplier_id: s.id,
+                  supplier_label: s.name,
+                  supplier_new: "",
+                }));
+              }}
+              onFreeText={(name) =>
+                setDraft((d) => ({
+                  ...d,
+                  supplier_id: "",
+                  supplier_label: name,
+                  supplier_new: name,
+                }))
+              }
+            />
 
             <label
               className="flex flex-col gap-1 text-sm font-semibold"
@@ -666,7 +624,7 @@ export default function FacturasPageClient() {
           }}
         >
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[40rem] border-collapse">
+            <table className="w-full min-w-[44rem] border-collapse">
               <thead>
                 <tr
                   style={{
@@ -720,6 +678,7 @@ export default function FacturasPageClient() {
                 {items.map((inv) => {
                   const colors = statusColors(inv.status);
                   const busy = savingId === inv.id;
+                  const editing = editingId === inv.id && editDraft;
                   return (
                     <tr
                       key={inv.id}
@@ -752,42 +711,97 @@ export default function FacturasPageClient() {
                       >
                         {formatYmd(inv.due_date)}
                       </td>
-                      <td
-                        className="px-3 py-2.5 text-sm font-semibold tabular-nums"
-                        style={{ color: "var(--primary-600)" }}
-                      >
-                        {formatValorCOPTable(inv.amount)}
+                      <td className="px-3 py-2.5 text-sm font-semibold tabular-nums">
+                        {editing ? (
+                          <input
+                            value={editDraft.amount}
+                            disabled={busy}
+                            onChange={(e) =>
+                              setEditDraft((d) =>
+                                d ? { ...d, amount: e.target.value } : d
+                              )
+                            }
+                            className={`${inputClass} min-w-[7rem]`}
+                            style={inputStyle}
+                            inputMode="decimal"
+                          />
+                        ) : (
+                          <span style={{ color: "var(--primary-600)" }}>
+                            {formatValorCOPTable(inv.amount)}
+                          </span>
+                        )}
                       </td>
                       <td className="px-3 py-2.5">
-                        <span
-                          className="inline-flex rounded-lg border px-2 py-0.5 text-xs font-bold"
-                          style={{
-                            backgroundColor: colors.bg,
-                            color: colors.fg,
-                            borderColor: colors.border,
-                          }}
-                        >
-                          {statusLabel(inv.status)}
-                        </span>
+                        {editing ? (
+                          <select
+                            value={editDraft.status}
+                            disabled={busy}
+                            onChange={(e) =>
+                              setEditDraft((d) =>
+                                d
+                                  ? {
+                                      ...d,
+                                      status: e.target.value as
+                                        | "pending"
+                                        | "paid",
+                                    }
+                                  : d
+                              )
+                            }
+                            className={inputClass}
+                            style={inputStyle}
+                          >
+                            <option value="pending">Pendiente</option>
+                            <option value="paid">Pagada</option>
+                          </select>
+                        ) : (
+                          <span
+                            className="inline-flex rounded-lg border px-2 py-0.5 text-xs font-bold"
+                            style={{
+                              backgroundColor: colors.bg,
+                              color: colors.fg,
+                              borderColor: colors.border,
+                            }}
+                          >
+                            {statusLabel(inv.status)}
+                          </span>
+                        )}
                       </td>
                       <td className="px-3 py-2.5 text-right">
-                        {inv.status !== "paid" ? (
+                        {editing ? (
+                          <div className="inline-flex flex-wrap justify-end gap-1.5">
+                            <button
+                              type="button"
+                              disabled={busy || loading}
+                              onClick={() => void saveEdit(inv)}
+                              className="rounded-lg px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-60"
+                              style={{ backgroundColor: "var(--primary-600)" }}
+                            >
+                              {busy ? "…" : "Guardar"}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={cancelEdit}
+                              className="rounded-lg border px-2.5 py-1 text-xs font-semibold disabled:opacity-60"
+                              style={{
+                                borderColor: "var(--primary-300)",
+                                color: "var(--primary-800)",
+                              }}
+                            >
+                              Cancelar
+                            </button>
+                          </div>
+                        ) : (
                           <button
                             type="button"
-                            disabled={busy || loading}
-                            onClick={() => void markPaid(inv)}
+                            disabled={busy || loading || editingId != null}
+                            onClick={() => startEdit(inv)}
                             className="rounded-lg px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-60"
                             style={{ backgroundColor: "var(--primary-600)" }}
                           >
-                            {busy ? "…" : "Marcar pagada"}
+                            Editar
                           </button>
-                        ) : (
-                          <span
-                            className="text-xs font-medium"
-                            style={{ color: "var(--primary-700)" }}
-                          >
-                            —
-                          </span>
                         )}
                       </td>
                     </tr>
