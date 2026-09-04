@@ -6,7 +6,10 @@ export const MAX_SHIFT_COUNT = 6;
 export type Drogueria = {
   id: number;
   name: string;
+  /** Turnos de caja (Ricky 2, Yessi 4). */
   shift_count: number;
+  /** Columnas de horario (Ricky 2, Yessi 3). */
+  schedule_count: number;
 };
 
 export type ApiFailure = { ok: false; status: number; body: unknown };
@@ -20,7 +23,16 @@ function parseDrogueria(raw: unknown): Drogueria | null {
       ? o.shift_count
       : null;
   if (shift == null) return null;
-  return { id: o.id, name: o.name, shift_count: shift };
+  const schedule =
+    typeof o.schedule_count === "number" && Number.isFinite(o.schedule_count)
+      ? o.schedule_count
+      : shift;
+  return {
+    id: o.id,
+    name: o.name,
+    shift_count: shift,
+    schedule_count: schedule,
+  };
 }
 
 export async function getDroguerias(): Promise<

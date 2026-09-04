@@ -17,6 +17,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import StoreBadges from "../payments/StoreBadges";
 import { useSelectedDrogueria } from "@/lib/use-selected-drogueria";
+import StatsEmployeesSection from "./StatsEmployeesSection";
 import StatsInvoicesSection from "./StatsInvoicesSection";
 import { PaymentsLineChart, StackedShiftBarChart, ValueBarChart } from "./StatsCharts";
 
@@ -35,7 +36,7 @@ const MONTH_NAMES_ES = [
   "Diciembre",
 ] as const;
 
-type StatsMetric = "qr" | "sales" | "invoices";
+type StatsMetric = "qr" | "sales" | "invoices" | "employees";
 type StatsPeriod = "month" | "year";
 
 const selectClass =
@@ -326,7 +327,7 @@ export default function StatsPageClient() {
         Estadísticas
       </h1>
       <p className="mt-1 text-sm" style={{ color: "var(--primary-700)" }}>
-        Pagos QR, ventas de caja y facturas por mes o año.
+        Pagos QR, ventas de caja, facturas y empleados por mes o año.
       </p>
 
       <div className="mt-6 w-full max-w-4xl">
@@ -347,6 +348,7 @@ export default function StatsPageClient() {
             { id: "qr", label: "Pagos QR" },
             { id: "sales", label: "Ventas" },
             { id: "invoices", label: "Facturas" },
+            { id: "employees", label: "Empleados" },
           ]}
         />
         <SegmentToggle
@@ -745,6 +747,10 @@ export default function StatsPageClient() {
 
           {metric === "invoices" ? (
             <StatsInvoicesSection periodTitle={periodTitle} data={data} />
+          ) : null}
+
+          {metric === "employees" ? (
+            <StatsEmployeesSection periodTitle={periodTitle} data={data} />
           ) : null}
 
           <article

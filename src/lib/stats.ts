@@ -131,6 +131,65 @@ export type StatsCompare = {
   invoices_open_now?: string;
 };
 
+export type EmployeeExtreme = {
+  employee_id: number;
+  employee: string;
+  value: string;
+} | null;
+
+export type EmployeeDayExtreme = {
+  employee_id: number;
+  employee: string;
+  date: string;
+  value: string;
+} | null;
+
+export type EmployeeMonthExtreme = {
+  employee_id: number;
+  employee: string;
+  month: number;
+  value: string;
+} | null;
+
+export type EmployeeKpi = {
+  employee_id: number;
+  employee: string;
+  assigned_shifts: number;
+  covered_shifts: number;
+  total: string;
+  avg: string | null;
+  best_day?: ExtremeDay;
+  worst_day?: ExtremeDay;
+  best_month?: ExtremeMonth;
+  worst_month?: ExtremeMonth;
+};
+
+export type MonthEmployees = {
+  kpis: {
+    assigned_shifts: number;
+    covered_shifts: number;
+    total_value: string;
+    best_employee: EmployeeExtreme;
+    worst_employee: EmployeeExtreme;
+    best_employee_day: EmployeeDayExtreme;
+    worst_employee_day: EmployeeDayExtreme;
+    by_employee: EmployeeKpi[];
+  };
+};
+
+export type YearEmployees = {
+  kpis: {
+    assigned_shifts: number;
+    covered_shifts: number;
+    total_value: string;
+    best_employee: EmployeeExtreme;
+    worst_employee: EmployeeExtreme;
+    best_employee_month: EmployeeMonthExtreme;
+    worst_employee_month: EmployeeMonthExtreme;
+    by_employee: EmployeeKpi[];
+  };
+};
+
 export type MonthStats = {
   period: "month";
   year: number;
@@ -176,6 +235,7 @@ export type MonthStats = {
     }[];
   };
   invoices?: MonthInvoices;
+  employees?: MonthEmployees;
   compare: StatsCompare;
 };
 
@@ -215,6 +275,7 @@ export type YearStats = {
     series: { month: number; value: string }[];
   };
   invoices?: YearInvoices;
+  employees?: YearEmployees;
   compare: StatsCompare;
 };
 
@@ -602,6 +663,140 @@ function parseShiftKpi(raw: unknown): ShiftKpi | null {
   };
 }
 
+function parseEmployeeExtreme(raw: unknown): EmployeeExtreme {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  if (typeof o.employee_id !== "number" || typeof o.employee !== "string") {
+    return null;
+  }
+  const value = asMoneyString(o.value);
+  if (value == null) return null;
+  return { employee_id: o.employee_id, employee: o.employee, value };
+}
+
+function parseEmployeeDayExtreme(raw: unknown): EmployeeDayExtreme {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  if (
+    typeof o.employee_id !== "number" ||
+    typeof o.employee !== "string" ||
+    typeof o.date !== "string"
+  ) {
+    return null;
+  }
+  const value = asMoneyString(o.value);
+  if (value == null) return null;
+  return {
+    employee_id: o.employee_id,
+    employee: o.employee,
+    date: o.date,
+    value,
+  };
+}
+
+function parseEmployeeMonthExtreme(raw: unknown): EmployeeMonthExtreme {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  if (
+    typeof o.employee_id !== "number" ||
+    typeof o.employee !== "string" ||
+    typeof o.month !== "number"
+  ) {
+    return null;
+  }
+  const value = asMoneyString(o.value);
+  if (value == null) return null;
+  return {
+    employee_id: o.employee_id,
+    employee: o.employee,
+    month: o.month,
+    value,
+  };
+}
+
+function parseEmployeeKpi(raw: unknown): EmployeeKpi | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  if (typeof o.employee_id !== "number" || typeof o.employee !== "string") {
+    return null;
+  }
+  const total = asMoneyString(o.total);
+  if (total == null) return null;
+  const avg = o.avg == null ? null : asMoneyString(o.avg);
+  if (o.avg != null && avg == null) return null;
+  return {
+    employee_id: o.employee_id,
+    employee: o.employee,
+    assigned_shifts:
+      typeof o.assigned_shifts === "number" ? o.assigned_shifts : 0,
+    covered_shifts:
+      typeof o.covered_shifts === "number" ? o.covered_shifts : 0,
+    total,
+    avg,
+    best_day: "best_day" in o ? parseExtremeDay(o.best_day) : undefined,
+    worst_day: "worst_day" in o ? parseExtremeDay(o.worst_day) : undefined,
+    best_month: "best_month" in o ? parseExtremeMonth(o.best_month) : undefined,
+    worst_month:
+      "worst_month" in o ? parseExtremeMonth(o.worst_month) : undefined,
+  };
+}
+
+function parseMonthEmployees(raw: unknown): MonthEmployees | null {
+  if (!raw || typeof raw !== "object") return null;
+  const block = raw as Record<string, unknown>;
+  if (!block.kpis || typeof block.kpis !== "object") return null;
+  const k = block.kpis as Record<string, unknown>;
+  const total_value = asMoneyString(k.total_value);
+  if (total_value == null) return null;
+  const by_employee = Array.isArray(k.by_employee)
+    ? k.by_employee
+        .map(parseEmployeeKpi)
+        .filter((x): x is EmployeeKpi => x != null)
+    : [];
+  return {
+    kpis: {
+      assigned_shifts:
+        typeof k.assigned_shifts === "number" ? k.assigned_shifts : 0,
+      covered_shifts:
+        typeof k.covered_shifts === "number" ? k.covered_shifts : 0,
+      total_value,
+      best_employee: parseEmployeeExtreme(k.best_employee),
+      worst_employee: parseEmployeeExtreme(k.worst_employee),
+      best_employee_day: parseEmployeeDayExtreme(k.best_employee_day),
+      worst_employee_day: parseEmployeeDayExtreme(k.worst_employee_day),
+      by_employee,
+    },
+  };
+}
+
+function parseYearEmployees(raw: unknown): YearEmployees | null {
+  if (!raw || typeof raw !== "object") return null;
+  const block = raw as Record<string, unknown>;
+  if (!block.kpis || typeof block.kpis !== "object") return null;
+  const k = block.kpis as Record<string, unknown>;
+  const total_value = asMoneyString(k.total_value);
+  if (total_value == null) return null;
+  const by_employee = Array.isArray(k.by_employee)
+    ? k.by_employee
+        .map(parseEmployeeKpi)
+        .filter((x): x is EmployeeKpi => x != null)
+    : [];
+  return {
+    kpis: {
+      assigned_shifts:
+        typeof k.assigned_shifts === "number" ? k.assigned_shifts : 0,
+      covered_shifts:
+        typeof k.covered_shifts === "number" ? k.covered_shifts : 0,
+      total_value,
+      best_employee: parseEmployeeExtreme(k.best_employee),
+      worst_employee: parseEmployeeExtreme(k.worst_employee),
+      best_employee_month: parseEmployeeMonthExtreme(k.best_employee_month),
+      worst_employee_month: parseEmployeeMonthExtreme(k.worst_employee_month),
+      by_employee,
+    },
+  };
+}
+
 function parseCompare(raw: unknown): StatsCompare | null {
   if (!raw || typeof raw !== "object") return null;
   const o = raw as Record<string, unknown>;
@@ -711,6 +906,7 @@ function parseMonthStats(raw: Record<string, unknown>): MonthStats | null {
   if (!compare) return null;
 
   const invoices = parseMonthInvoices(raw.invoices) ?? undefined;
+  const employees = parseMonthEmployees(raw.employees) ?? undefined;
 
   return {
     period: "month",
@@ -758,6 +954,7 @@ function parseMonthStats(raw: Record<string, unknown>): MonthStats | null {
       series: salesSeries,
     },
     invoices,
+    employees,
     compare,
   };
 }
@@ -834,6 +1031,7 @@ function parseYearStats(raw: Record<string, unknown>): YearStats | null {
   if (!compare) return null;
 
   const invoices = parseYearInvoices(raw.invoices) ?? undefined;
+  const employees = parseYearEmployees(raw.employees) ?? undefined;
 
   return {
     period: "year",
@@ -875,6 +1073,7 @@ function parseYearStats(raw: Record<string, unknown>): YearStats | null {
       series: salesSeries,
     },
     invoices,
+    employees,
     compare,
   };
 }
