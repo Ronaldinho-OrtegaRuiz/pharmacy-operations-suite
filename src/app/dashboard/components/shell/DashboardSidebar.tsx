@@ -1,9 +1,10 @@
 "use client";
 
-import { getAuthUsername } from "@/lib/auth-storage";
+import { postLogout } from "@/lib/api";
+import { getAuthUsername, removeToken } from "@/lib/auth-storage";
 import { canAccessStats } from "@/lib/stats-access";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import SidebarAppearanceControls from "./SidebarAppearanceControls";
 
@@ -259,7 +260,81 @@ export default function DashboardSidebar({
         })}
       </div>
 
+      <SidebarLogoutButton />
       <SidebarAppearanceControls />
     </aside>
+  );
+}
+
+function IconLogout() {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <path
+        d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6A2.25 2.25 0 0 0 5.25 5.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15"
+        stroke="currentColor"
+        strokeWidth="1.9"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M12 12h8.25M18 8.25 21.75 12 18 15.75"
+        stroke="currentColor"
+        strokeWidth="1.9"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function SidebarLogoutButton() {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+
+  const onLogout = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await postLogout();
+    } catch {
+      // Igual limpiamos local aunque falle la red.
+    } finally {
+      removeToken();
+      router.replace("/login");
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={() => void onLogout()}
+      disabled={busy}
+      className="mb-3 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-colors disabled:opacity-60"
+      style={{ color: "var(--primary-700)" }}
+      onMouseEnter={(e) => {
+        if (busy) return;
+        e.currentTarget.style.backgroundColor =
+          "color-mix(in srgb, var(--primary-600) 14%, transparent)";
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.backgroundColor = "transparent";
+      }}
+    >
+      <NavIconBox>
+        <span style={{ color: "var(--primary-700)" }}>
+          <IconLogout />
+        </span>
+      </NavIconBox>
+      <span className="text-sm font-medium">
+        {busy ? "Cerrando…" : "Cerrar sesión"}
+      </span>
+    </button>
   );
 }

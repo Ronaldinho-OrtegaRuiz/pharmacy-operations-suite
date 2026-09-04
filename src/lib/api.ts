@@ -125,3 +125,17 @@ export async function fetchWithAuth(
     notifyApiRequestEnd();
   }
 }
+
+/** POST /logout — invalida el token en el servidor. Body vacío. */
+export async function postLogout(): Promise<
+  { ok: true } | { ok: false; status: number }
+> {
+  try {
+    const url = `${getApiBaseUrl()}/logout`;
+    const res = await fetchWithAuth(url, { method: "POST" });
+    if (!res.ok) return { ok: false, status: res.status };
+    return { ok: true };
+  } catch {
+    return { ok: false, status: 0 };
+  }
+}

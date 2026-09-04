@@ -3,7 +3,10 @@
 import { useToast } from "@/components/ToastProvider";
 import { removeToken } from "@/lib/auth-storage";
 import { formatValorCOPTable } from "@/lib/money-format";
-import { todayYmdInTz } from "@/lib/payment-date-bounds";
+import {
+  todayYmdInTz,
+  ymdBoundsForMonth,
+} from "@/lib/payment-date-bounds";
 import {
   apiErrorMessage,
   createInvoices,
@@ -16,11 +19,39 @@ import { useRouter } from "next/navigation";
 import {
   useCallback,
   useEffect,
+  useRef,
   useState,
   type FormEvent,
 } from "react";
-import StoreBadges, { DROGUERIA_RICKY_ID } from "../payments/StoreBadges";
+import { createPortal } from "react-dom";
+import StoreBadges from "../payments/StoreBadges";
+import { useSelectedDrogueria } from "@/lib/use-selected-drogueria";
 import SupplierTypeahead from "./SupplierTypeahead";
+
+const MONTH_NAMES_ES = [
+  "Enero",
+  "Febrero",
+  "Marzo",
+  "Abril",
+  "Mayo",
+  "Junio",
+  "Julio",
+  "Agosto",
+  "Septiembre",
+  "Octubre",
+  "Noviembre",
+  "Diciembre",
+] as const;
+
+function monthFromYmd(ymd: string): number {
+  const m = Number(ymd.slice(5, 7));
+  return m >= 1 && m <= 12 ? m : new Date().getMonth() + 1;
+}
+
+function yearFromYmd(ymd: string): number {
+  const y = Number(ymd.slice(0, 4));
+  return Number.isFinite(y) ? y : new Date().getFullYear();
+}
 
 const inputClass =
   "h-9 w-full rounded-lg border-2 px-2 text-sm font-semibold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[color:var(--primary-400)] disabled:opacity-60";
@@ -109,18 +140,22 @@ function emptyDraft(): DraftForm {
 type EditDraft = {
   amount: string;
   status: "pending" | "paid";
+  supplier_id: number | "";
+  supplier_label: string;
+  supplier_new: string;
 };
 
 export default function FacturasPageClient() {
   const router = useRouter();
   const toast = useToast();
 
-  const [drogueriaId, setDrogueriaId] = useState(DROGUERIA_RICKY_ID);
+  const [drogueriaId, setDrogueriaId] = useSelectedDrogueria();
   const [statusFilter, setStatusFilter] = useState<"" | InvoiceStatus>("");
   const [supplierFilter, setSupplierFilter] = useState<number | "">("");
   const [supplierFilterLabel, setSupplierFilterLabel] = useState("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const [selectedMonth, setSelectedMonth] = useState(() =>
+    monthFromYmd(todayYmdInTz())
+  );
 
   const [items, setItems] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
@@ -131,8 +166,11 @@ export default function FacturasPageClient() {
   const [draft, setDraft] = useState<DraftForm>(emptyDraft);
   const [creating, setCreating] = useState(false);
 
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
   const [editDraft, setEditDraft] = useState<EditDraft | null>(null);
+  const [editMounted, setEditMounted] = useState(false);
+  const [editVisible, setEditVisible] = useState(false);
+  const editCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const expireAuth = useCallback(() => {
     removeToken();
@@ -141,6 +179,8 @@ export default function FacturasPageClient() {
   }, [router, toast]);
 
   const load = useCallback(async () => {
+    const year = yearFromYmd(todayYmdInTz());
+    const { from, to } = ymdBoundsForMonth(year, selectedMonth);
     setLoading(true);
     setError(null);
     try {
@@ -148,8 +188,8 @@ export default function FacturasPageClient() {
         drogueria_id: drogueriaId,
         status: statusFilter,
         supplier_id: supplierFilter,
-        date_from: dateFrom || undefined,
-        date_to: dateTo || undefined,
+        date_from: from,
+        date_to: to,
       });
       if (!res.ok) {
         if (res.status === 401) {
@@ -170,10 +210,9 @@ export default function FacturasPageClient() {
       setLoading(false);
     }
   }, [
-    dateFrom,
-    dateTo,
     drogueriaId,
     expireAuth,
+    selectedMonth,
     statusFilter,
     supplierFilter,
   ]);
@@ -183,20 +222,40 @@ export default function FacturasPageClient() {
   }, [load]);
 
   const startEdit = (inv: Invoice) => {
-    setEditingId(inv.id);
+    if (editCloseTimer.current) {
+      clearTimeout(editCloseTimer.current);
+      editCloseTimer.current = null;
+    }
+    setEditingInvoice(inv);
     setEditDraft({
       amount: inv.amount,
       status: editableStatus(inv.status),
+      supplier_id: inv.supplier_id,
+      supplier_label: inv.supplier,
+      supplier_new: "",
+    });
+    setEditMounted(true);
+    setEditVisible(false);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => setEditVisible(true));
     });
   };
 
-  const cancelEdit = () => {
-    setEditingId(null);
-    setEditDraft(null);
-  };
+  const closeEdit = useCallback(() => {
+    if (savingId != null) return;
+    setEditVisible(false);
+    if (editCloseTimer.current) clearTimeout(editCloseTimer.current);
+    editCloseTimer.current = setTimeout(() => {
+      setEditingInvoice(null);
+      setEditDraft(null);
+      setEditMounted(false);
+      editCloseTimer.current = null;
+    }, 220);
+  }, [savingId]);
 
-  const saveEdit = async (inv: Invoice) => {
-    if (!editDraft) return;
+  const saveEdit = async () => {
+    if (!editDraft || !editingInvoice) return;
+    const inv = editingInvoice;
     const amount = editDraft.amount.trim();
     if (!amount) {
       toast.show("El monto no puede quedar vacío.", "error");
@@ -206,13 +265,33 @@ export default function FacturasPageClient() {
       id: number;
       status?: "pending" | "paid";
       amount?: string;
+      supplier_id?: number;
+      supplier?: string;
     } = { id: inv.id };
     if (amount !== inv.amount) payload.amount = amount;
     const nextStatus = editDraft.status;
     const prevEditable = editableStatus(inv.status);
     if (nextStatus !== prevEditable) payload.status = nextStatus;
-    if (payload.amount == null && payload.status == null) {
-      cancelEdit();
+
+    const newName =
+      editDraft.supplier_new.trim() || editDraft.supplier_label.trim();
+    if (editDraft.supplier_id !== "" && editDraft.supplier_id !== inv.supplier_id) {
+      payload.supplier_id = Number(editDraft.supplier_id);
+    } else if (
+      editDraft.supplier_id === "" &&
+      newName &&
+      newName.toLowerCase() !== inv.supplier.toLowerCase()
+    ) {
+      payload.supplier = newName;
+    }
+
+    if (
+      payload.amount == null &&
+      payload.status == null &&
+      payload.supplier_id == null &&
+      payload.supplier == null
+    ) {
+      closeEdit();
       return;
     }
 
@@ -220,6 +299,7 @@ export default function FacturasPageClient() {
     try {
       const res = await patchInvoice(payload);
       if (!res.ok) {
+        setSavingId(null);
         if (res.status === 401) {
           expireAuth();
           return;
@@ -234,13 +314,35 @@ export default function FacturasPageClient() {
         prev.map((it) => (it.id === res.data.id ? res.data : it))
       );
       toast.show(`Factura ${res.data.invoice_number} actualizada.`, "success");
-      cancelEdit();
+      setSavingId(null);
+      setEditVisible(false);
+      if (editCloseTimer.current) clearTimeout(editCloseTimer.current);
+      editCloseTimer.current = setTimeout(() => {
+        setEditingInvoice(null);
+        setEditDraft(null);
+        setEditMounted(false);
+        editCloseTimer.current = null;
+      }, 220);
     } catch {
       toast.show("Error de red al actualizar la factura.", "error");
-    } finally {
       setSavingId(null);
     }
   };
+
+  useEffect(() => {
+    if (!editMounted) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeEdit();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [editMounted, closeEdit]);
+
+  useEffect(() => {
+    return () => {
+      if (editCloseTimer.current) clearTimeout(editCloseTimer.current);
+    };
+  }, []);
 
   const onCreate = async (e: FormEvent) => {
     e.preventDefault();
@@ -389,32 +491,28 @@ export default function FacturasPageClient() {
             }}
           />
           <label
-            className="flex flex-col gap-1 text-sm font-semibold"
+            className="inline-flex items-center gap-2 text-sm font-semibold"
             style={{ color: "var(--primary-800)" }}
           >
-            Desde (factura)
-            <input
-              type="date"
-              value={dateFrom}
+            Mes
+            <select
+              value={selectedMonth}
               disabled={loading}
-              onChange={(e) => setDateFrom(e.target.value)}
-              className={inputClass}
-              style={inputStyle}
-            />
-          </label>
-          <label
-            className="flex flex-col gap-1 text-sm font-semibold"
-            style={{ color: "var(--primary-800)" }}
-          >
-            Hasta (factura)
-            <input
-              type="date"
-              value={dateTo}
-              disabled={loading}
-              onChange={(e) => setDateTo(e.target.value)}
-              className={inputClass}
-              style={inputStyle}
-            />
+              onChange={(e) => setSelectedMonth(Number(e.target.value))}
+              className="h-9 min-w-[7.5rem] cursor-pointer rounded-lg border-2 px-2 text-sm font-semibold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[color:var(--primary-400)] disabled:cursor-not-allowed disabled:opacity-60"
+              style={{
+                borderColor: "var(--primary-400)",
+                color: "var(--foreground)",
+                backgroundColor:
+                  "color-mix(in srgb, var(--primary-600) 14%, var(--background))",
+              }}
+            >
+              {MONTH_NAMES_ES.map((name, i) => (
+                <option key={name} value={i + 1}>
+                  {name}
+                </option>
+              ))}
+            </select>
           </label>
           <button
             type="button"
@@ -678,7 +776,6 @@ export default function FacturasPageClient() {
                 {items.map((inv) => {
                   const colors = statusColors(inv.status);
                   const busy = savingId === inv.id;
-                  const editing = editingId === inv.id && editDraft;
                   return (
                     <tr
                       key={inv.id}
@@ -711,98 +808,34 @@ export default function FacturasPageClient() {
                       >
                         {formatYmd(inv.due_date)}
                       </td>
-                      <td className="px-3 py-2.5 text-sm font-semibold tabular-nums">
-                        {editing ? (
-                          <input
-                            value={editDraft.amount}
-                            disabled={busy}
-                            onChange={(e) =>
-                              setEditDraft((d) =>
-                                d ? { ...d, amount: e.target.value } : d
-                              )
-                            }
-                            className={`${inputClass} min-w-[7rem]`}
-                            style={inputStyle}
-                            inputMode="decimal"
-                          />
-                        ) : (
-                          <span style={{ color: "var(--primary-600)" }}>
-                            {formatValorCOPTable(inv.amount)}
-                          </span>
-                        )}
+                      <td
+                        className="px-3 py-2.5 text-sm font-semibold tabular-nums"
+                        style={{ color: "var(--primary-600)" }}
+                      >
+                        {formatValorCOPTable(inv.amount)}
                       </td>
                       <td className="px-3 py-2.5">
-                        {editing ? (
-                          <select
-                            value={editDraft.status}
-                            disabled={busy}
-                            onChange={(e) =>
-                              setEditDraft((d) =>
-                                d
-                                  ? {
-                                      ...d,
-                                      status: e.target.value as
-                                        | "pending"
-                                        | "paid",
-                                    }
-                                  : d
-                              )
-                            }
-                            className={inputClass}
-                            style={inputStyle}
-                          >
-                            <option value="pending">Pendiente</option>
-                            <option value="paid">Pagada</option>
-                          </select>
-                        ) : (
-                          <span
-                            className="inline-flex rounded-lg border px-2 py-0.5 text-xs font-bold"
-                            style={{
-                              backgroundColor: colors.bg,
-                              color: colors.fg,
-                              borderColor: colors.border,
-                            }}
-                          >
-                            {statusLabel(inv.status)}
-                          </span>
-                        )}
+                        <span
+                          className="inline-flex rounded-lg border px-2 py-0.5 text-xs font-bold"
+                          style={{
+                            backgroundColor: colors.bg,
+                            color: colors.fg,
+                            borderColor: colors.border,
+                          }}
+                        >
+                          {statusLabel(inv.status)}
+                        </span>
                       </td>
                       <td className="px-3 py-2.5 text-right">
-                        {editing ? (
-                          <div className="inline-flex flex-wrap justify-end gap-1.5">
-                            <button
-                              type="button"
-                              disabled={busy || loading}
-                              onClick={() => void saveEdit(inv)}
-                              className="rounded-lg px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-60"
-                              style={{ backgroundColor: "var(--primary-600)" }}
-                            >
-                              {busy ? "…" : "Guardar"}
-                            </button>
-                            <button
-                              type="button"
-                              disabled={busy}
-                              onClick={cancelEdit}
-                              className="rounded-lg border px-2.5 py-1 text-xs font-semibold disabled:opacity-60"
-                              style={{
-                                borderColor: "var(--primary-300)",
-                                color: "var(--primary-800)",
-                              }}
-                            >
-                              Cancelar
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            disabled={busy || loading || editingId != null}
-                            onClick={() => startEdit(inv)}
-                            className="rounded-lg px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-60"
-                            style={{ backgroundColor: "var(--primary-600)" }}
-                          >
-                            Editar
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          disabled={busy || loading || editingInvoice != null}
+                          onClick={() => startEdit(inv)}
+                          className="rounded-lg px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-60"
+                          style={{ backgroundColor: "var(--primary-600)" }}
+                        >
+                          Editar
+                        </button>
                       </td>
                     </tr>
                   );
@@ -812,6 +845,169 @@ export default function FacturasPageClient() {
           </div>
         </div>
       ) : null}
+
+      {editMounted && editingInvoice && editDraft
+        ? createPortal(
+            <div
+              className="fixed inset-0 z-[400] flex items-center justify-center p-4"
+              role="presentation"
+            >
+              <div
+                className="absolute inset-0 transition-opacity duration-200 ease-out"
+                style={{
+                  backgroundColor:
+                    "color-mix(in srgb, var(--foreground) 28%, transparent)",
+                  opacity: editVisible ? 1 : 0,
+                }}
+                aria-hidden
+                onMouseDown={() => closeEdit()}
+              />
+              <div
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="edit-invoice-title"
+                className="relative z-10 w-full max-w-md rounded-2xl border p-5 transition-[opacity,transform] duration-200 ease-out"
+                style={{
+                  borderColor: "var(--primary-200)",
+                  backgroundColor: "var(--background)",
+                  boxShadow: "none",
+                  opacity: editVisible ? 1 : 0,
+                  transform: editVisible
+                    ? "translateY(0) scale(1)"
+                    : "translateY(10px) scale(0.96)",
+                }}
+              >
+                <h2
+                  id="edit-invoice-title"
+                  className="text-lg font-bold"
+                  style={{ color: "var(--primary-800)" }}
+                >
+                  Editar factura {editingInvoice.invoice_number}
+                </h2>
+                <p
+                  className="mt-1 text-xs"
+                  style={{ color: "var(--primary-700)" }}
+                >
+                  Cambia proveedor, monto o estado (pendiente / pagada).
+                </p>
+
+                <div className="mt-4 flex flex-col gap-3">
+                  <SupplierTypeahead
+                    valueId={editDraft.supplier_id}
+                    valueLabel={
+                      editDraft.supplier_label || editDraft.supplier_new
+                    }
+                    disabled={savingId === editingInvoice.id}
+                    allowCreate
+                    placeholder="Buscar proveedor…"
+                    onAuthExpired={expireAuth}
+                    onSelect={(s) => {
+                      if (!s) {
+                        setEditDraft((d) =>
+                          d
+                            ? { ...d, supplier_id: "", supplier_label: "" }
+                            : d
+                        );
+                        return;
+                      }
+                      setEditDraft((d) =>
+                        d
+                          ? {
+                              ...d,
+                              supplier_id: s.id,
+                              supplier_label: s.name,
+                              supplier_new: "",
+                            }
+                          : d
+                      );
+                    }}
+                    onFreeText={(name) =>
+                      setEditDraft((d) =>
+                        d
+                          ? {
+                              ...d,
+                              supplier_id: "",
+                              supplier_label: name,
+                              supplier_new: name,
+                            }
+                          : d
+                      )
+                    }
+                  />
+                  <label
+                    className="flex flex-col gap-1 text-sm font-semibold"
+                    style={{ color: "var(--primary-800)" }}
+                  >
+                    Monto
+                    <input
+                      value={editDraft.amount}
+                      disabled={savingId === editingInvoice.id}
+                      onChange={(e) =>
+                        setEditDraft((d) =>
+                          d ? { ...d, amount: e.target.value } : d
+                        )
+                      }
+                      className={inputClass}
+                      style={inputStyle}
+                      inputMode="decimal"
+                    />
+                  </label>
+                  <label
+                    className="flex flex-col gap-1 text-sm font-semibold"
+                    style={{ color: "var(--primary-800)" }}
+                  >
+                    Estado
+                    <select
+                      value={editDraft.status}
+                      disabled={savingId === editingInvoice.id}
+                      onChange={(e) =>
+                        setEditDraft((d) =>
+                          d
+                            ? {
+                                ...d,
+                                status: e.target.value as "pending" | "paid",
+                              }
+                            : d
+                        )
+                      }
+                      className={inputClass}
+                      style={inputStyle}
+                    >
+                      <option value="pending">Pendiente</option>
+                      <option value="paid">Pagada</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div className="mt-5 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    disabled={savingId === editingInvoice.id}
+                    onClick={closeEdit}
+                    className="h-10 rounded-xl border-2 px-4 text-sm font-semibold disabled:opacity-60"
+                    style={{
+                      borderColor: "var(--primary-400)",
+                      color: "var(--primary-800)",
+                      backgroundColor: "transparent",
+                    }}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    disabled={savingId === editingInvoice.id}
+                    onClick={() => void saveEdit()}
+                    className="h-10 rounded-xl px-4 text-sm font-semibold text-white disabled:opacity-60"
+                    style={{ backgroundColor: "var(--primary-600)" }}
+                  >
+                    {savingId === editingInvoice.id ? "Guardando…" : "Guardar"}
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
     </section>
   );
 }

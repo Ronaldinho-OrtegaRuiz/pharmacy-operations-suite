@@ -1,5 +1,6 @@
 "use client";
 
+import { postLogout } from "@/lib/api";
 import { removeToken } from "@/lib/auth-storage";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
@@ -8,8 +9,22 @@ export default function LogoutPage() {
   const router = useRouter();
 
   useEffect(() => {
-    removeToken();
-    router.replace("/login");
+    let cancelled = false;
+    (async () => {
+      try {
+        await postLogout();
+      } catch {
+        // Igual limpiamos local.
+      } finally {
+        if (!cancelled) {
+          removeToken();
+          router.replace("/login");
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
   return (

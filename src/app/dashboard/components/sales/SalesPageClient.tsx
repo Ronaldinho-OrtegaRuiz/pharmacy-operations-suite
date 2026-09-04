@@ -22,7 +22,8 @@ import { canAccessStats } from "@/lib/stats-access";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import DateFilterControls from "../payments/DateFilterControls";
-import StoreBadges, { DROGUERIA_RICKY_ID } from "../payments/StoreBadges";
+import StoreBadges from "../payments/StoreBadges";
+import { useSelectedDrogueria } from "@/lib/use-selected-drogueria";
 import DaySalesCard from "./DaySalesCard";
 import SalesMonthCalendar from "./SalesMonthCalendar";
 import SalesViewToggle, { type SalesAdminView } from "./SalesViewToggle";
@@ -59,7 +60,7 @@ export default function SalesPageClient() {
   const [sessionUser, setSessionUser] = useState<string | null | undefined>(
     undefined
   );
-  const [drogueriaId, setDrogueriaId] = useState(DROGUERIA_RICKY_ID);
+  const [drogueriaId, setDrogueriaId] = useSelectedDrogueria();
   const [specificDate, setSpecificDate] = useState(() => todayYmdInTz());
   const [selectedMonth, setSelectedMonth] = useState(() =>
     monthFromYmd(todayYmdInTz())

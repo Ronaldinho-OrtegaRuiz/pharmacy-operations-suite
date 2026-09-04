@@ -297,10 +297,10 @@ export function ValueBarChart({
 const SHIFT_FILLS = [
   "var(--primary-700)",
   "var(--primary-500)",
-  "var(--primary-400)",
-  "var(--primary-300)",
   "var(--primary-600)",
+  "var(--primary-400)",
   "var(--primary-200)",
+  "var(--primary-100)",
 ] as const;
 
 export type StackedDayBar = {

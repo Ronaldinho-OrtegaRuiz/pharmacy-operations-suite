@@ -13,7 +13,8 @@ import {
 } from "@/lib/stats";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import StoreBadges, { DROGUERIA_RICKY_ID } from "../payments/StoreBadges";
+import StoreBadges from "../payments/StoreBadges";
+import { useSelectedDrogueria } from "@/lib/use-selected-drogueria";
 import StatsInvoicesSection from "./StatsInvoicesSection";
 import { PaymentsLineChart, StackedShiftBarChart, ValueBarChart } from "./StatsCharts";
 
@@ -234,7 +235,7 @@ export default function StatsPageClient() {
   const [period, setPeriod] = useState<StatsPeriod>("month");
   const [month, setMonth] = useState(currentMonth);
   const [year, setYear] = useState(currentYear);
-  const [drogueriaId, setDrogueriaId] = useState(DROGUERIA_RICKY_ID);
+  const [drogueriaId, setDrogueriaId] = useSelectedDrogueria();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

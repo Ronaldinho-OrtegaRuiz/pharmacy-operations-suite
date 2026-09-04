@@ -27,7 +27,8 @@ import DateFilterControls, {
   type PaymentDateMode,
 } from "./DateFilterControls";
 import PaymentsPaginationView from "./PaymentsPaginationView";
-import StoreBadges, { DROGUERIA_RICKY_ID } from "./StoreBadges";
+import StoreBadges from "./StoreBadges";
+import { useSelectedDrogueria } from "@/lib/use-selected-drogueria";
 
 function todayOnDateLocal(): string {
   const n = new Date();
@@ -71,7 +72,7 @@ export default function DashboardPaymentsSection() {
   const router = useRouter();
   const toast = useToast();
 
-  const [drogueriaId, setDrogueriaId] = useState(DROGUERIA_RICKY_ID);
+  const [drogueriaId, setDrogueriaId] = useSelectedDrogueria();
   const [sessionUser, setSessionUser] = useState<string | null | undefined>(
     undefined
   );

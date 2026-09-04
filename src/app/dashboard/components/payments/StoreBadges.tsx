@@ -1,10 +1,12 @@
 "use client";
 
+import {
+  DROGUERIA_RICKY_ID,
+  DROGUERIA_YESSI_ID,
+} from "@/lib/drogueria-preference";
 import { useMemo } from "react";
 
-/** IDs alineados con el backend: Ricky = 1, Yessi = 2 */
-export const DROGUERIA_RICKY_ID = 1;
-export const DROGUERIA_YESSI_ID = 2;
+export { DROGUERIA_RICKY_ID, DROGUERIA_YESSI_ID };
 
 type Store = {
   id: number;
