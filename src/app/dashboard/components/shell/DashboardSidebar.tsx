@@ -167,6 +167,38 @@ function IconSchedule() {
   );
 }
 
+function IconPrices() {
+  return (
+    <svg
+      width="22"
+      height="22"
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <path
+        d="M4 7.5h16v11a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5v-11Z"
+        stroke="currentColor"
+        strokeWidth="1.9"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M8 7.5V6a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v1.5"
+        stroke="currentColor"
+        strokeWidth="1.9"
+        strokeLinecap="round"
+      />
+      <path
+        d="M9.2 13.2c.35-.9 1.2-1.45 2.3-1.45 1.35 0 2.3.7 2.3 1.75 0 2.35-4.6.95-4.6 3.3 0 1 .95 1.7 2.3 1.7 1.05 0 1.9-.45 2.25-1.25"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 type NavItem = {
   href: string;
   label: string;
@@ -191,6 +223,7 @@ export default function DashboardSidebar({
       { href: "/dashboard", label: "Pagos QR", icon: <IconQr /> },
       { href: "/dashboard/sales", label: "Ventas", icon: <IconPeso /> },
       { href: "/dashboard/horario", label: "Horario", icon: <IconSchedule /> },
+      { href: "/dashboard/precios", label: "Ref. Precios", icon: <IconPrices /> },
       { href: "/dashboard/facturas", label: "Facturas", icon: <IconInvoice /> },
       { href: "/dashboard/stats", label: "Estadísticas", icon: <IconStats /> },
       {
