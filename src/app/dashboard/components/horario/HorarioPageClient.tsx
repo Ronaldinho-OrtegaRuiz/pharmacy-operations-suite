@@ -210,15 +210,23 @@ export default function HorarioPageClient() {
     if (loading) return;
     const root = scrollRef.current;
     if (!root) return;
-    const el = root.querySelector(
+    const nodes = root.querySelectorAll(
       `[data-schedule-day="${CSS.escape(today)}"]`
-    ) as HTMLElement | null;
-    if (!el) return;
-    const parent = el.closest(".overflow-x-auto") as HTMLElement | null;
-    if (!parent) return;
-    const left =
-      el.offsetLeft - parent.clientWidth / 2 + el.clientWidth / 2;
-    parent.scrollTo({ left: Math.max(0, left), behavior: "smooth" });
+    );
+    nodes.forEach((node) => {
+      const el = node as HTMLElement;
+      const parent = el.closest(".overflow-x-auto") as HTMLElement | null;
+      if (!parent) return;
+      const sticky = parent.querySelector(
+        "th.sticky"
+      ) as HTMLElement | null;
+      const stickyW = sticky?.getBoundingClientRect().width ?? 0;
+      const parentRect = parent.getBoundingClientRect();
+      const elRect = el.getBoundingClientRect();
+      // "Hoy" pegado a la derecha de la columna Turno (sin centrar).
+      const delta = elRect.left - parentRect.left - stickyW;
+      parent.scrollBy({ left: delta, behavior: "smooth" });
+    });
   }, [loading, today, ricky, yessi]);
 
   const queueChange = (

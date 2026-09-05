@@ -1,10 +1,17 @@
 "use client";
 
-import { formatValorCOPTable } from "@/lib/money-format";
+import { parseMoneyFromApi } from "@/lib/money-format";
 import { todayYmdInTz } from "@/lib/payment-date-bounds";
 import type { DaySales } from "@/lib/sales";
 
 const WEEKDAY_LABELS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
+
+/** Compacto para celdas del calendario (sin centavos → menos solapes). */
+function formatCalendarMoney(raw: string): string {
+  const n = parseMoneyFromApi(raw);
+  if (!Number.isFinite(n)) return "—";
+  return `$${Math.round(n).toLocaleString("es-CO")}`;
+}
 
 function pad2(n: number): string {
   return String(n).padStart(2, "0");
@@ -135,8 +142,11 @@ export default function SalesMonthCalendar({ days, dateFrom, dateTo }: Props) {
             >
               {title}
             </h3>
-            <div className="overflow-x-auto px-2 pb-3 sm:px-3">
-              <table className="w-full min-w-[32rem] table-fixed border-collapse">
+            <div className="overflow-x-auto overscroll-x-contain px-2 pb-3 sm:px-3">
+              <table
+                className="w-max border-collapse"
+                style={{ minWidth: "calc(7 * 5.75rem)" }}
+              >
                 <caption className="sr-only">{`Calendario de ventas ${title}`}</caption>
                 <thead>
                   <tr>
@@ -144,7 +154,7 @@ export default function SalesMonthCalendar({ days, dateFrom, dateTo }: Props) {
                       <th
                         key={label}
                         scope="col"
-                        className="px-1 py-2 text-center text-xs font-semibold"
+                        className="min-w-[5.75rem] px-1 py-2 text-center text-xs font-semibold"
                         style={{ color: "var(--primary-700)" }}
                       >
                         {label}
@@ -162,7 +172,10 @@ export default function SalesMonthCalendar({ days, dateFrom, dateTo }: Props) {
                         const isToday = cell.ymd === today;
                         const disabled = !cell.inMonth || !cell.inRange;
                         return (
-                          <td key={di} className="p-1 align-top">
+                          <td
+                            key={di}
+                            className="min-w-[5.75rem] p-1 align-top"
+                          >
                             <div
                               className="flex min-h-[4.5rem] flex-col rounded-lg px-1.5 py-1.5"
                               style={{
@@ -172,9 +185,10 @@ export default function SalesMonthCalendar({ days, dateFrom, dateTo }: Props) {
                                     ? "color-mix(in srgb, var(--primary-200) 22%, var(--background))"
                                     : "transparent",
                                 opacity: disabled ? 0.42 : 1,
-                                outline: isToday && cell.inRange
-                                  ? "2px solid var(--primary-600)"
-                                  : "none",
+                                outline:
+                                  isToday && cell.inRange
+                                    ? "2px solid var(--primary-600)"
+                                    : "none",
                                 outlineOffset: isToday ? "-1px" : undefined,
                               }}
                             >
@@ -192,11 +206,11 @@ export default function SalesMonthCalendar({ days, dateFrom, dateTo }: Props) {
                                   </span>
                                   {cell.inRange ? (
                                     <span
-                                      className="mt-1 text-[11px] font-semibold leading-tight tabular-nums sm:text-xs"
+                                      className="mt-1 text-[11px] font-semibold leading-snug tabular-nums sm:text-xs"
                                       style={{ color: "var(--primary-600)" }}
                                     >
                                       {cell.total != null
-                                        ? formatValorCOPTable(cell.total)
+                                        ? formatCalendarMoney(cell.total)
                                         : "—"}
                                     </span>
                                   ) : null}

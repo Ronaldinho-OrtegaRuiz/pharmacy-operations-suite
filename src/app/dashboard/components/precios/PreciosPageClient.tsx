@@ -2,7 +2,6 @@
 
 import { useToast } from "@/components/ToastProvider";
 import {
-  mockCompetitorSearch,
   productMatchesClientFilter,
   searchCompetitors,
   type CompetitorSearch,
@@ -91,14 +90,6 @@ export default function PreciosPageClient() {
     void runSearch(q);
   };
 
-  const onDemo = () => {
-    const demoQ = q.trim() || "acetaminofen 500mg AG";
-    setQ(demoQ);
-    setError(null);
-    setResult(mockCompetitorSearch(demoQ));
-    toast.show("Demo local (sin llamar al scrape).", "success");
-  };
-
   return (
     <section aria-label="Referencia de precios competencia" className="w-full max-w-6xl pb-8">
       <h1
@@ -139,20 +130,6 @@ export default function PreciosPageClient() {
           style={{ backgroundColor: "var(--primary-600)" }}
         >
           {loading ? `Buscando… ${elapsedSec}s` : "Buscar"}
-        </button>
-        <button
-          type="button"
-          disabled={loading}
-          onClick={onDemo}
-          className="h-10 shrink-0 rounded-xl border-2 px-4 text-sm font-semibold disabled:opacity-60"
-          style={{
-            borderColor: "var(--primary-400)",
-            color: "var(--primary-800)",
-            backgroundColor:
-              "color-mix(in srgb, var(--primary-600) 10%, var(--background))",
-          }}
-        >
-          Ver demo
         </button>
       </form>
 

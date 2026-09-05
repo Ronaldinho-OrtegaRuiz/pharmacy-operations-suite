@@ -35,7 +35,6 @@ export default function StoreBadges({
       className="inline-flex w-full items-stretch overflow-hidden rounded-2xl border"
       style={{
         borderColor: "var(--primary-100)",
-        // Fondo igual al “suelo” del dashboard para que no se vea con sombra/contraste raro.
         backgroundColor: "var(--primary-100)",
       }}
     >
@@ -44,24 +43,23 @@ export default function StoreBadges({
         return (
           <div
             key={s.id}
-            className="flex flex-1 items-center justify-center"
+            className="flex min-h-[2.75rem] flex-1 items-stretch"
             style={{
-              // Separador vertical suave entre segmentos
               borderLeft:
-                idx === 0 ? "none" : "1px solid color-mix(in srgb, var(--primary-200) 60%, white)",
+                idx === 0
+                  ? "none"
+                  : "1px solid color-mix(in srgb, var(--primary-200) 60%, white)",
             }}
           >
             <button
               type="button"
               onClick={() => onDrogueriaChange(s.id)}
-              className="w-full px-4 py-2 text-sm font-semibold transition-colors outline-none focus:outline-none"
+              className="flex h-full w-full items-center justify-center px-3 py-2 text-center text-sm font-semibold leading-tight transition-colors outline-none focus:outline-none"
               style={{
                 backgroundColor: selected
                   ? "var(--primary-600)"
                   : "var(--primary-100)",
-                color: selected
-                  ? "white"
-                  : "var(--primary-700)",
+                color: selected ? "white" : "var(--primary-700)",
                 boxShadow: "none",
                 outline: "none",
               }}

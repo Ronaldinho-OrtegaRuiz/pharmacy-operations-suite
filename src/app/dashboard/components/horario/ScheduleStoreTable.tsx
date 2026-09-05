@@ -91,12 +91,12 @@ export default function ScheduleStoreTable({
           Sin días en este rango.
         </p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[36rem] border-collapse">
+        <div className="overflow-x-auto overscroll-x-contain">
+          <table className="w-max border-collapse">
             <thead>
               <tr>
                 <th
-                  className="sticky left-0 z-10 px-3 py-2 text-left text-xs font-bold"
+                  className="sticky left-0 z-10 min-w-[4.75rem] px-3 py-2 text-left text-xs font-bold"
                   style={{
                     color: "var(--primary-800)",
                     backgroundColor: "var(--primary-100)",
@@ -112,7 +112,7 @@ export default function ScheduleStoreTable({
                     <th
                       key={d.date}
                       data-schedule-day={d.date}
-                      className="px-2 py-2 text-center text-xs font-bold"
+                      className="min-w-[7.5rem] px-2 py-2 text-center text-xs font-bold"
                       style={{
                         color: "var(--primary-800)",
                         backgroundColor: isToday
@@ -140,7 +140,7 @@ export default function ScheduleStoreTable({
                   <tr key={shiftNo}>
                     <th
                       scope="row"
-                      className="sticky left-0 z-10 px-3 py-2 text-left text-sm font-bold"
+                      className="sticky left-0 z-10 min-w-[4.75rem] px-3 py-2 text-left text-sm font-bold"
                       style={{
                         color: "var(--primary-800)",
                         backgroundColor:
@@ -181,7 +181,7 @@ export default function ScheduleStoreTable({
                       return (
                         <td
                           key={d.date}
-                          className="p-1 align-middle"
+                          className="min-w-[7.5rem] p-1 align-middle"
                           style={{
                             borderTop: "1px solid var(--primary-200)",
                             borderLeft: "1px solid var(--primary-200)",
@@ -214,7 +214,7 @@ export default function ScheduleStoreTable({
                           }
                         >
                           <div
-                            className="relative flex min-h-[2.75rem] items-center justify-center rounded-lg px-1.5 py-1 text-center text-xs font-semibold transition-colors"
+                            className="relative flex min-h-[2.75rem] items-center justify-center rounded-lg px-2 py-1.5 pr-5 text-center text-xs font-semibold leading-snug"
                             style={{
                               backgroundColor: filled
                                 ? "color-mix(in srgb, var(--primary-600) 16%, var(--background))"
@@ -229,11 +229,13 @@ export default function ScheduleStoreTable({
                                   : "none",
                             }}
                           >
-                            {filled
-                              ? cell.employee
-                              : editable
-                                ? "Soltar"
-                                : "—"}
+                            <span className="line-clamp-2">
+                              {filled
+                                ? cell.employee
+                                : editable
+                                  ? "Soltar"
+                                  : "—"}
+                            </span>
                             {editable && filled ? (
                               <button
                                 type="button"

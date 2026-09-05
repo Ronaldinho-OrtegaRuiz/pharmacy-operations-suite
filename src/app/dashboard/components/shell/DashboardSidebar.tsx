@@ -143,25 +143,33 @@ function IconSchedule() {
       aria-hidden="true"
     >
       <rect
-        x="3.25"
-        y="4.5"
-        width="17.5"
-        height="15.25"
+        x="3"
+        y="5"
+        width="18"
+        height="16"
         rx="2.2"
         stroke="currentColor"
         strokeWidth="1.9"
       />
       <path
-        d="M3.25 9.25h17.5M8 2.75v3.5M16 2.75v3.5"
+        d="M3 9.5h18M8 3v3.5M16 3v3.5"
         stroke="currentColor"
         strokeWidth="1.9"
         strokeLinecap="round"
       />
-      <path
-        d="M7.5 13h2.5M11.5 13h2.5M15.5 13h2M7.5 16.25h2.5M11.5 16.25h2.5"
+      <circle
+        cx="15.5"
+        cy="15.5"
+        r="4.1"
         stroke="currentColor"
-        strokeWidth="1.9"
+        strokeWidth="1.8"
+      />
+      <path
+        d="M15.5 13.6v2.1l1.45.9"
+        stroke="currentColor"
+        strokeWidth="1.7"
         strokeLinecap="round"
+        strokeLinejoin="round"
       />
     </svg>
   );
@@ -177,22 +185,23 @@ function IconPrices() {
       xmlns="http://www.w3.org/2000/svg"
       aria-hidden="true"
     >
-      <path
-        d="M4 7.5h16v11a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5v-11Z"
+      <circle
+        cx="10.5"
+        cy="10.5"
+        r="6.4"
         stroke="currentColor"
         strokeWidth="1.9"
-        strokeLinejoin="round"
       />
       <path
-        d="M8 7.5V6a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v1.5"
+        d="M15.2 15.2 20.4 20.4"
         stroke="currentColor"
         strokeWidth="1.9"
         strokeLinecap="round"
       />
       <path
-        d="M9.2 13.2c.35-.9 1.2-1.45 2.3-1.45 1.35 0 2.3.7 2.3 1.75 0 2.35-4.6.95-4.6 3.3 0 1 .95 1.7 2.3 1.7 1.05 0 1.9-.45 2.25-1.25"
+        d="M8.35 9.1c.3-.75 1-1.2 1.9-1.2 1.1 0 1.9.6 1.9 1.45 0 1.95-3.8.8-3.8 2.75 0 .85.8 1.45 1.9 1.45.85 0 1.55-.4 1.85-1.05"
         stroke="currentColor"
-        strokeWidth="1.7"
+        strokeWidth="1.65"
         strokeLinecap="round"
       />
     </svg>
