@@ -1,4 +1,4 @@
-/** Servicio de competencia (sin auth). */
+/** Servicio de competencia (sin auth) — búsqueda por SSE. */
 
 export const COMPETITORS_BASE_URL =
   (typeof process !== "undefined" &&
@@ -6,8 +6,8 @@ export const COMPETITORS_BASE_URL =
     process.env.NEXT_PUBLIC_COMPETITORS_URL.trim()) ||
   "https://buscador-competencia-production.up.railway.app";
 
-/** Timeout largo: el scrape abre 6 sitios. */
-export const COMPETITORS_FETCH_TIMEOUT_MS = 240_000;
+/** Timeout cliente: búsqueda + cola. */
+export const COMPETITORS_STREAM_TIMEOUT_MS = 240_000;
 
 export type CompetitorSite =
   | "la_economia"
@@ -36,18 +36,21 @@ export type SiteSlice = {
   products: CompetitorProduct[];
 };
 
-export type CompetitorSearch = {
+export type LabAliases = {
+  ag: string[];
+  mk: string[];
+};
+
+export type CompetitorStreamMeta = {
   q: string;
   q_site: string;
-  lab_aliases: {
-    ag: string[];
-    mk: string[];
-  };
-  slices: SiteSlice[];
+  lab_aliases: LabAliases;
+  sites: string[];
+  priority: string[];
   error?: string;
 };
 
-const SITE_ORDER: CompetitorSite[] = [
+export const SITE_ORDER: CompetitorSite[] = [
   "la_economia",
   "la_rebaja",
   "tu_drogueria",
@@ -79,12 +82,14 @@ function parseProduct(raw: unknown): CompetitorProduct | null {
   };
 }
 
-function parseSlice(raw: unknown): SiteSlice | null {
+export function parseSiteSlice(raw: unknown): SiteSlice | null {
   if (!raw || typeof raw !== "object") return null;
   const o = raw as Record<string, unknown>;
   if (typeof o.site !== "string" || typeof o.label !== "string") return null;
   const products = Array.isArray(o.products)
-    ? o.products.map(parseProduct).filter((x): x is CompetitorProduct => x != null)
+    ? o.products
+        .map(parseProduct)
+        .filter((x): x is CompetitorProduct => x != null)
     : [];
   return {
     site: o.site,
@@ -97,43 +102,50 @@ function parseSlice(raw: unknown): SiteSlice | null {
   };
 }
 
-export function parseCompetitorSearch(raw: unknown): CompetitorSearch | null {
+function parseLabAliases(raw: unknown): LabAliases {
+  if (!raw || typeof raw !== "object") return { ag: [], mk: [] };
+  const o = raw as Record<string, unknown>;
+  return {
+    ag: Array.isArray(o.ag)
+      ? o.ag.filter((x): x is string => typeof x === "string")
+      : [],
+    mk: Array.isArray(o.mk)
+      ? o.mk.filter((x): x is string => typeof x === "string")
+      : [],
+  };
+}
+
+export function parseStreamMeta(raw: unknown): CompetitorStreamMeta | null {
   if (!raw || typeof raw !== "object") return null;
   const o = raw as Record<string, unknown>;
   if (typeof o.q !== "string" || typeof o.q_site !== "string") return null;
-  const aliases =
-    o.lab_aliases && typeof o.lab_aliases === "object"
-      ? (o.lab_aliases as Record<string, unknown>)
-      : {};
-  const ag = Array.isArray(aliases.ag)
-    ? aliases.ag.filter((x): x is string => typeof x === "string")
-    : [];
-  const mk = Array.isArray(aliases.mk)
-    ? aliases.mk.filter((x): x is string => typeof x === "string")
-    : [];
-  const slicesRaw = Array.isArray(o.slices) ? o.slices : [];
-  const parsed = slicesRaw
-    .map(parseSlice)
-    .filter((x): x is SiteSlice => x != null);
-  // Orden estable del API
-  const bySite = new Map(parsed.map((s) => [s.site, s]));
-  const slices: SiteSlice[] = [];
-  for (const id of SITE_ORDER) {
-    const hit = bySite.get(id);
-    if (hit) {
-      slices.push(hit);
-      bySite.delete(id);
-    }
-  }
-  for (const rest of bySite.values()) slices.push(rest);
-
   return {
     q: o.q,
     q_site: o.q_site,
-    lab_aliases: { ag, mk },
-    slices,
+    lab_aliases: parseLabAliases(o.lab_aliases),
+    sites: Array.isArray(o.sites)
+      ? o.sites.filter((x): x is string => typeof x === "string")
+      : [],
+    priority: Array.isArray(o.priority)
+      ? o.priority.filter((x): x is string => typeof x === "string")
+      : [],
     error: typeof o.error === "string" ? o.error : undefined,
   };
+}
+
+/** Orden fijo Economía → … → Farmanorte; el resto al final. */
+export function orderSlices(slices: SiteSlice[]): SiteSlice[] {
+  const bySite = new Map(slices.map((s) => [s.site, s]));
+  const out: SiteSlice[] = [];
+  for (const id of SITE_ORDER) {
+    const hit = bySite.get(id);
+    if (hit) {
+      out.push(hit);
+      bySite.delete(id);
+    }
+  }
+  for (const rest of bySite.values()) out.push(rest);
+  return out;
 }
 
 export function normalizeForMatch(s: string): string {
@@ -147,7 +159,7 @@ export function normalizeForMatch(s: string): string {
 /** Expande AG/MK con alias del API; resto se busca literal. */
 export function expandLabTokens(
   rawLab: string,
-  aliases: CompetitorSearch["lab_aliases"]
+  aliases: LabAliases
 ): string[] {
   const t = normalizeForMatch(rawLab);
   if (!t) return [];
@@ -169,7 +181,7 @@ export function productMatchesClientFilter(
   opts: {
     dose?: string;
     lab?: string;
-    aliases: CompetitorSearch["lab_aliases"];
+    aliases: LabAliases;
   }
 ): boolean {
   const hay = normalizeForMatch(
@@ -190,57 +202,111 @@ export function productMatchesClientFilter(
   return true;
 }
 
-export async function searchCompetitors(
-  q: string
-): Promise<
-  | { ok: true; data: CompetitorSearch }
-  | { ok: false; status: number; body: unknown; aborted?: boolean }
-> {
-  const trimmed = q.trim();
-  if (trimmed.length < 2 || trimmed.length > 80) {
-    return {
-      ok: false,
-      status: 400,
-      body: { detail: "La búsqueda debe tener entre 2 y 80 caracteres." },
-    };
-  }
+export type CompetitorStreamHandlers = {
+  onQueued?: (p: { ahead: number; message: string }) => void;
+  onStarted?: (p: { message: string }) => void;
+  onMeta?: (p: CompetitorStreamMeta) => void;
+  onSlice?: (s: SiteSlice) => void;
+  onDone?: () => void;
+  onError?: (message: string) => void;
+};
 
-  const url = `${COMPETITORS_BASE_URL}/competitors/search?q=${encodeURIComponent(trimmed)}`;
+function parseEventData(raw: string): unknown {
   try {
-    const res = await fetch(url, {
-      method: "GET",
-      signal: AbortSignal.timeout(COMPETITORS_FETCH_TIMEOUT_MS),
-    });
-    let body: unknown = {};
-    try {
-      body = await res.json();
-    } catch {
-      body = {};
-    }
-    if (!res.ok) return { ok: false, status: res.status, body };
-    const data = parseCompetitorSearch(body);
-    if (!data) {
-      return {
-        ok: false,
-        status: 422,
-        body: { detail: "Respuesta de competencia inválida." },
-      };
-    }
-    return { ok: true, data };
-  } catch (e) {
-    const aborted =
-      e instanceof DOMException &&
-      (e.name === "TimeoutError" || e.name === "AbortError");
-    return {
-      ok: false,
-      status: 0,
-      body: {
-        detail: aborted
-          ? "La búsqueda tardó demasiado (timeout)."
-          : "Error de red al consultar competencia.",
-      },
-      aborted,
-    };
+    return JSON.parse(raw) as unknown;
+  } catch {
+    return null;
   }
 }
 
+/**
+ * Abre un EventSource a GET /competitors/search/stream.
+ * Devuelve cleanup (cerrar). No abrir dos a la vez en la misma sesión.
+ */
+export function openCompetitorSearchStream(
+  q: string,
+  handlers: CompetitorStreamHandlers,
+  opts?: { sites?: string[]; timeoutMs?: number }
+): () => void {
+  const trimmed = q.trim();
+  if (trimmed.length < 2 || trimmed.length > 80) {
+    handlers.onError?.("La búsqueda debe tener entre 2 y 80 caracteres.");
+    return () => {};
+  }
+
+  const sp = new URLSearchParams();
+  sp.set("q", trimmed);
+  if (opts?.sites?.length) sp.set("sites", opts.sites.join(","));
+
+  const url = `${COMPETITORS_BASE_URL}/competitors/search/stream?${sp.toString()}`;
+  const es = new EventSource(url);
+  let finished = false;
+  const timeoutMs = opts?.timeoutMs ?? COMPETITORS_STREAM_TIMEOUT_MS;
+
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    window.clearTimeout(timer);
+    es.close();
+  };
+
+  const timer = window.setTimeout(() => {
+    finish();
+    handlers.onError?.(
+      "La búsqueda tardó demasiado (timeout). Intenta de nuevo."
+    );
+  }, timeoutMs);
+
+  es.addEventListener("queued", (ev) => {
+    const data = parseEventData((ev as MessageEvent).data);
+    if (!data || typeof data !== "object") return;
+    const o = data as Record<string, unknown>;
+    handlers.onQueued?.({
+      ahead: typeof o.ahead === "number" ? o.ahead : 0,
+      message:
+        typeof o.message === "string"
+          ? o.message
+          : "Hay gente buscando…",
+    });
+  });
+
+  es.addEventListener("started", (ev) => {
+    const data = parseEventData((ev as MessageEvent).data);
+    if (!data || typeof data !== "object") return;
+    const o = data as Record<string, unknown>;
+    handlers.onStarted?.({
+      message:
+        typeof o.message === "string" ? o.message : "Cargando…",
+    });
+  });
+
+  es.addEventListener("meta", (ev) => {
+    const data = parseEventData((ev as MessageEvent).data);
+    const meta = parseStreamMeta(data);
+    if (!meta) return;
+    handlers.onMeta?.(meta);
+  });
+
+  es.addEventListener("slice", (ev) => {
+    const data = parseEventData((ev as MessageEvent).data);
+    const slice = parseSiteSlice(data);
+    if (slice) handlers.onSlice?.(slice);
+  });
+
+  es.addEventListener("done", () => {
+    finish();
+    handlers.onDone?.();
+  });
+
+  es.onerror = () => {
+    if (finished) return;
+    finish();
+    handlers.onError?.(
+      "Se cortó la conexión con el buscador. Intenta de nuevo."
+    );
+  };
+
+  return () => {
+    finish();
+  };
+}

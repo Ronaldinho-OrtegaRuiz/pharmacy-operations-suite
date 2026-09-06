@@ -60,7 +60,9 @@ export default function SiteCarousel({ slice, products }: Props) {
           >
             {hasProducts
               ? `${products.length} producto${products.length === 1 ? "" : "s"}`
-              : "No encontró resultados"}
+              : !slice.ok
+                ? slice.error?.trim() || "No se pudo cargar este sitio"
+                : "No encontró resultados"}
           </p>
         </div>
         {hasProducts ? (
@@ -102,7 +104,9 @@ export default function SiteCarousel({ slice, products }: Props) {
           className="px-4 py-6 text-sm font-medium"
           style={{ color: "var(--primary-700)" }}
         >
-          No encontró resultados
+          {!slice.ok
+            ? slice.error?.trim() || "No se pudo cargar este sitio"
+            : "No encontró resultados"}
         </p>
       ) : (
         <div
