@@ -189,23 +189,28 @@ export async function createInvoices(params: {
   };
 }
 
-/** PATCH /invoices/{id} — status, amount y/o proveedor (mínimo un campo). */
+/** PATCH /invoices/{id} — status, amount, due_date y/o proveedor (mínimo un campo). */
 export async function patchInvoice(params: {
   id: number;
   status?: "pending" | "paid";
   amount?: string;
+  due_date?: string;
   supplier_id?: number;
   supplier?: string;
 }): Promise<{ ok: true; data: Invoice } | ApiFailure> {
   const payload: {
     status?: "pending" | "paid";
     amount?: string;
+    due_date?: string;
     supplier_id?: number;
     supplier?: string;
   } = {};
   if (params.status != null) payload.status = params.status;
   if (params.amount != null && params.amount.trim() !== "") {
     payload.amount = params.amount.trim();
+  }
+  if (params.due_date != null && params.due_date.trim() !== "") {
+    payload.due_date = params.due_date.trim();
   }
   if (params.supplier_id != null) payload.supplier_id = params.supplier_id;
   else if (params.supplier != null && params.supplier.trim() !== "") {
@@ -214,13 +219,14 @@ export async function patchInvoice(params: {
   if (
     payload.status == null &&
     payload.amount == null &&
+    payload.due_date == null &&
     payload.supplier_id == null &&
     payload.supplier == null
   ) {
     return {
       ok: false,
       status: 422,
-      body: { detail: "Envía status, amount y/o proveedor." },
+      body: { detail: "Envía status, amount, due_date y/o proveedor." },
     };
   }
   const url = `${getApiBaseUrl()}/invoices/${params.id}`;

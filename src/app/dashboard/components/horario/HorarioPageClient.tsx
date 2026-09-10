@@ -43,11 +43,13 @@ const BULK_MAX = 100;
 type PendingCell = {
   drogueria_id: number;
   work_date: string;
-  shift_no: number;
+  /** null = fila Extra (acompañante). */
+  shift_no: number | null;
   employee_id: number | null;
 };
 
 function pendingKey(p: PendingCell): string {
+  if (p.shift_no == null) return `${p.drogueria_id}:${p.work_date}:extra`;
   return `${p.drogueria_id}:${p.work_date}:${p.shift_no}`;
 }
 
@@ -85,6 +87,21 @@ function patchLocalCell(
     }
     return { ...d, shifts };
   });
+  return { ...prev, days };
+}
+
+function patchLocalExtra(
+  prev: ScheduleRange | null,
+  workDate: string,
+  employee_id: number | null,
+  employee: string | null
+): ScheduleRange | null {
+  if (!prev) return prev;
+  const days = prev.days.map((d) =>
+    d.date === workDate
+      ? { ...d, extra: { employee_id, employee } }
+      : d
+  );
   return { ...prev, days };
 }
 
@@ -258,6 +275,28 @@ export default function HorarioPageClient() {
     }
   };
 
+  const queueExtraChange = (
+    drogueriaId: number,
+    workDate: string,
+    employeeId: number | null,
+    employeeName: string | null
+  ) => {
+    const item: PendingCell = {
+      drogueria_id: drogueriaId,
+      work_date: workDate,
+      shift_no: null,
+      employee_id: employeeId,
+    };
+    setPending((prev) => {
+      const next = new Map(prev);
+      next.set(pendingKey(item), item);
+      return next;
+    });
+    setYessi((prev) =>
+      patchLocalExtra(prev, workDate, employeeId, employeeName)
+    );
+  };
+
   const onAssign = (
     drogueriaId: number,
     workDate: string,
@@ -280,6 +319,19 @@ export default function HorarioPageClient() {
     queueChange(drogueriaId, workDate, shiftNo, null, null);
   };
 
+  const onAssignExtra = (workDate: string, employeeId: number) => {
+    const emp = employees.find((e) => e.id === employeeId);
+    if (!emp) {
+      toast.show("Empleado no encontrado.", "error");
+      return;
+    }
+    queueExtraChange(DROGUERIA_YESSI_ID, workDate, employeeId, emp.name);
+  };
+
+  const onClearExtra = (workDate: string) => {
+    queueExtraChange(DROGUERIA_YESSI_ID, workDate, null, null);
+  };
+
   const onSave = async () => {
     if (pending.size === 0) {
       toast.show("No hay cambios por guardar.", "error");
@@ -296,11 +348,19 @@ export default function HorarioPageClient() {
     const byStore = new Map<number, ScheduleBulkItem[]>();
     for (const item of pending.values()) {
       const list = byStore.get(item.drogueria_id) ?? [];
-      list.push({
-        work_date: item.work_date,
-        shift_no: item.shift_no,
-        employee_id: item.employee_id,
-      });
+      if (item.shift_no == null) {
+        list.push({
+          work_date: item.work_date,
+          extra: true,
+          employee_id: item.employee_id,
+        });
+      } else {
+        list.push({
+          work_date: item.work_date,
+          shift_no: item.shift_no,
+          employee_id: item.employee_id,
+        });
+      }
       byStore.set(item.drogueria_id, list);
     }
 
@@ -419,6 +479,10 @@ export default function HorarioPageClient() {
                 ? { ...s, employee: res.data.name }
                 : s
             ),
+            extra:
+              d.extra.employee_id === res.data.id
+                ? { ...d.extra, employee: res.data.name }
+                : d.extra,
           })),
         };
       };
@@ -441,7 +505,7 @@ export default function HorarioPageClient() {
       <p className="mt-1 text-sm" style={{ color: "var(--primary-700)" }}>
         Ricky arriba y Yessi abajo. Hoy queda al centro del rango.
         {isAdmin
-          ? " Arrastra empleados y pulsa Guardar cuando termines."
+          ? " Arrastra empleados y pulsa Guardar cuando termines. En Yessi hay fila Extra (10-12)."
           : " Solo lectura."}
       </p>
 
@@ -659,6 +723,7 @@ export default function HorarioPageClient() {
           schedule={yessi}
           todayYmd={today}
           editable={isAdmin}
+          showExtra
           dirtyKeys={dirtyKeys}
           onAssign={(date, shift, empId) =>
             onAssign(DROGUERIA_YESSI_ID, date, shift, empId)
@@ -666,6 +731,8 @@ export default function HorarioPageClient() {
           onClear={(date, shift) =>
             onClear(DROGUERIA_YESSI_ID, date, shift)
           }
+          onAssignExtra={onAssignExtra}
+          onClearExtra={onClearExtra}
         />
       </div>
     </section>

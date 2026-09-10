@@ -12,9 +12,16 @@ export type ScheduleShiftCell = {
   sales_shifts: number[];
 };
 
+/** Acompañante del día (no cuenta en ventas ni stats de turno). */
+export type ScheduleExtra = {
+  employee_id: number | null;
+  employee: string | null;
+};
+
 export type ScheduleDay = {
   date: string;
   shifts: ScheduleShiftCell[];
+  extra: ScheduleExtra;
 };
 
 export type ScheduleRange = {
@@ -24,12 +31,18 @@ export type ScheduleRange = {
   days: ScheduleDay[];
 };
 
-export type ScheduleBulkItem = {
-  work_date: string;
-  /** Columna de horario (Yessi 1–3, Ricky 1–2). */
-  shift_no: number;
-  employee_id: number | null;
-};
+/** Turno: shift_no. Extra: extra true sin shift_no. */
+export type ScheduleBulkItem =
+  | {
+      work_date: string;
+      shift_no: number;
+      employee_id: number | null;
+    }
+  | {
+      work_date: string;
+      extra: true;
+      employee_id: number | null;
+    };
 
 export function apiErrorMessage(body: unknown, fallback: string): string {
   return detailFromBody(body) ?? fallback;
@@ -78,6 +91,26 @@ function parseShiftCell(raw: unknown): ScheduleShiftCell | null {
   };
 }
 
+function parseExtra(raw: unknown): ScheduleExtra {
+  if (!raw || typeof raw !== "object") {
+    return { employee_id: null, employee: null };
+  }
+  const o = raw as Record<string, unknown>;
+  const employee_id =
+    o.employee_id == null
+      ? null
+      : typeof o.employee_id === "number"
+        ? o.employee_id
+        : null;
+  const employee =
+    o.employee == null
+      ? null
+      : typeof o.employee === "string"
+        ? o.employee
+        : null;
+  return { employee_id, employee };
+}
+
 function parseScheduleDay(raw: unknown): ScheduleDay | null {
   if (!raw || typeof raw !== "object") return null;
   const o = raw as Record<string, unknown>;
@@ -87,7 +120,7 @@ function parseScheduleDay(raw: unknown): ScheduleDay | null {
     .map(parseShiftCell)
     .filter((x): x is ScheduleShiftCell => x != null)
     .sort((a, b) => a.shift_no - b.shift_no);
-  return { date, shifts };
+  return { date, shifts, extra: parseExtra(o.extra) };
 }
 
 export function parseScheduleRange(raw: unknown): ScheduleRange | null {
@@ -219,7 +252,68 @@ export async function deleteScheduleCell(params: {
   return { ok: true, data };
 }
 
-/** PUT /schedule — varios ítems. */
+/** PUT /schedule/{drogueria_id}/{fecha}/extra { employee_id } */
+export async function putScheduleExtra(params: {
+  drogueria_id: number;
+  work_date: string;
+  employee_id: number;
+}): Promise<
+  | { ok: true; data: ScheduleDay }
+  | { ok: false; status: number; body: unknown }
+> {
+  const url = `${getApiBaseUrl()}/schedule/${params.drogueria_id}/${params.work_date}/extra`;
+  const res = await fetchWithAuth(url, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ employee_id: params.employee_id }),
+  });
+  let body: unknown = {};
+  try {
+    body = await res.json();
+  } catch {
+    body = {};
+  }
+  if (!res.ok) return { ok: false, status: res.status, body };
+  const data = parseScheduleDayResponse(body);
+  if (!data) {
+    return {
+      ok: false,
+      status: 422,
+      body: { detail: "Respuesta de extra inválida." },
+    };
+  }
+  return { ok: true, data };
+}
+
+/** DELETE /schedule/{drogueria_id}/{fecha}/extra */
+export async function deleteScheduleExtra(params: {
+  drogueria_id: number;
+  work_date: string;
+}): Promise<
+  | { ok: true; data: ScheduleDay }
+  | { ok: false; status: number; body: unknown }
+> {
+  const url = `${getApiBaseUrl()}/schedule/${params.drogueria_id}/${params.work_date}/extra`;
+  const res = await fetchWithAuth(url, { method: "DELETE" });
+  let body: unknown = {};
+  try {
+    body = await res.json();
+  } catch {
+    body = {};
+  }
+  if (!res.ok) return { ok: false, status: res.status, body };
+  const data = parseScheduleDayResponse(body);
+  if (!data) {
+    return {
+      ok: false,
+      status: 422,
+      body: { detail: "Respuesta de extra inválida." },
+    };
+  }
+  return { ok: true, data };
+}
+
+/** PUT /schedule — varios ítems (turno o extra). */
 export async function putScheduleBulk(params: {
   drogueria_id: number;
   items: ScheduleBulkItem[];

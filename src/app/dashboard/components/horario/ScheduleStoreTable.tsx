@@ -20,13 +20,21 @@ type Props = {
   schedule: ScheduleRange | null;
   todayYmd: string;
   editable: boolean;
+  /** Fila Extra / acompañante (Yessi). */
+  showExtra?: boolean;
   dirtyKeys: Set<string>;
   onAssign: (workDate: string, shiftNo: number, employeeId: number) => void;
   onClear: (workDate: string, shiftNo: number) => void;
+  onAssignExtra?: (workDate: string, employeeId: number) => void;
+  onClearExtra?: (workDate: string) => void;
 };
 
 function cellKey(drogueriaId: number, date: string, shiftNo: number): string {
   return `${drogueriaId}:${date}:${shiftNo}`;
+}
+
+function extraKey(drogueriaId: number, date: string): string {
+  return `${drogueriaId}:${date}:extra`;
 }
 
 export default function ScheduleStoreTable({
@@ -34,9 +42,12 @@ export default function ScheduleStoreTable({
   schedule,
   todayYmd,
   editable,
+  showExtra = false,
   dirtyKeys,
   onAssign,
   onClear,
+  onAssignExtra,
+  onClearExtra,
 }: Props) {
   const days = schedule?.days ?? [];
   const scheduleCount = schedule?.schedule_count ?? 0;
@@ -257,6 +268,116 @@ export default function ScheduleStoreTable({
                     })}
                   </tr>
                 ))}
+              {showExtra ? (
+                <tr>
+                  <th
+                    scope="row"
+                    className="sticky left-0 z-10 min-w-[4.75rem] px-3 py-2 text-left text-sm font-bold"
+                    style={{
+                      color: "var(--primary-800)",
+                      backgroundColor:
+                        "color-mix(in srgb, var(--primary-600) 10%, var(--background))",
+                      borderTop: "1px solid var(--primary-200)",
+                      borderRight: "1px solid var(--primary-200)",
+                    }}
+                  >
+                    <div>Extra</div>
+                    <div
+                      className="text-[10px] font-semibold opacity-75"
+                      style={{ color: "var(--primary-700)" }}
+                    >
+                      10-12
+                    </div>
+                  </th>
+                  {days.map((d) => {
+                    const day = dayMap.get(d.date);
+                    const extra = day?.extra ?? {
+                      employee_id: null,
+                      employee: null,
+                    };
+                    const key = extraKey(drogueriaId, d.date);
+                    const dirty = dirtyKeys.has(key);
+                    const filled =
+                      extra.employee_id != null && extra.employee != null;
+                    return (
+                      <td
+                        key={`extra-${d.date}`}
+                        className="min-w-[7.5rem] p-1 align-middle"
+                        style={{
+                          borderTop: "1px solid var(--primary-200)",
+                          borderLeft: "1px solid var(--primary-200)",
+                          backgroundColor:
+                            d.date === todayYmd
+                              ? "color-mix(in srgb, var(--primary-600) 8%, var(--background))"
+                              : undefined,
+                        }}
+                        onDragOver={
+                          editable
+                            ? (e) => {
+                                e.preventDefault();
+                                e.dataTransfer.dropEffect = "copy";
+                              }
+                            : undefined
+                        }
+                        onDrop={
+                          editable && onAssignExtra
+                            ? (e) => {
+                                e.preventDefault();
+                                const raw =
+                                  e.dataTransfer.getData(
+                                    "application/x-employee-id"
+                                  ) || e.dataTransfer.getData("text/plain");
+                                const id = Number(raw);
+                                if (!Number.isFinite(id) || id < 1) return;
+                                onAssignExtra(d.date, id);
+                              }
+                            : undefined
+                        }
+                      >
+                        <div
+                          className="relative flex min-h-[2.75rem] items-center justify-center rounded-lg px-2 py-1.5 pr-5 text-center text-xs font-semibold leading-snug"
+                          style={{
+                            backgroundColor: filled
+                              ? "color-mix(in srgb, var(--primary-600) 16%, var(--background))"
+                              : "color-mix(in srgb, var(--primary-200) 35%, var(--background))",
+                            color: filled
+                              ? "var(--primary-800)"
+                              : "var(--primary-600)",
+                            outline: dirty
+                              ? "2px solid var(--primary-500)"
+                              : editable
+                                ? "1px dashed color-mix(in srgb, var(--primary-400) 55%, transparent)"
+                                : "none",
+                          }}
+                        >
+                          <span className="line-clamp-2">
+                            {filled
+                              ? extra.employee
+                              : editable
+                                ? "Soltar"
+                                : "—"}
+                          </span>
+                          {editable && filled && onClearExtra ? (
+                            <button
+                              type="button"
+                              aria-label={`Quitar extra ${extra.employee}`}
+                              onClick={() => onClearExtra(d.date)}
+                              className="absolute right-0.5 top-0.5 flex h-5 w-5 items-center justify-center rounded-md text-[11px] font-bold leading-none"
+                              style={{
+                                color: "var(--primary-700)",
+                                backgroundColor:
+                                  "color-mix(in srgb, var(--background) 70%, transparent)",
+                              }}
+                            >
+                              ×
+                            </button>
+                          ) : null}
+                        </div>
+                      </td>
+                    );
+                  })}
+                </tr>
+              ) : null}
             </tbody>
           </table>
         </div>

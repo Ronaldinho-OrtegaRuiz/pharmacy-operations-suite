@@ -140,6 +140,7 @@ function emptyDraft(): DraftForm {
 type EditDraft = {
   amount: string;
   status: "pending" | "paid";
+  due_date: string;
   supplier_id: number | "";
   supplier_label: string;
   supplier_new: string;
@@ -230,6 +231,7 @@ export default function FacturasPageClient() {
     setEditDraft({
       amount: inv.amount,
       status: editableStatus(inv.status),
+      due_date: inv.due_date,
       supplier_id: inv.supplier_id,
       supplier_label: inv.supplier,
       supplier_new: "",
@@ -261,14 +263,28 @@ export default function FacturasPageClient() {
       toast.show("El monto no puede quedar vacío.", "error");
       return;
     }
+    const dueDate = editDraft.due_date.trim();
+    if (!dueDate) {
+      toast.show("La fecha de vencimiento es obligatoria.", "error");
+      return;
+    }
+    if (dueDate < inv.invoice_date) {
+      toast.show(
+        "El vencimiento no puede ser anterior a la fecha de la factura.",
+        "error"
+      );
+      return;
+    }
     const payload: {
       id: number;
       status?: "pending" | "paid";
       amount?: string;
+      due_date?: string;
       supplier_id?: number;
       supplier?: string;
     } = { id: inv.id };
     if (amount !== inv.amount) payload.amount = amount;
+    if (dueDate !== inv.due_date) payload.due_date = dueDate;
     const nextStatus = editDraft.status;
     const prevEditable = editableStatus(inv.status);
     if (nextStatus !== prevEditable) payload.status = nextStatus;
@@ -287,6 +303,7 @@ export default function FacturasPageClient() {
 
     if (
       payload.amount == null &&
+      payload.due_date == null &&
       payload.status == null &&
       payload.supplier_id == null &&
       payload.supplier == null
@@ -888,7 +905,8 @@ export default function FacturasPageClient() {
                   className="mt-1 text-xs"
                   style={{ color: "var(--primary-700)" }}
                 >
-                  Cambia proveedor, monto o estado (pendiente / pagada).
+                  Cambia proveedor, monto, vencimiento o estado (pendiente /
+                  pagada).
                 </p>
 
                 <div className="mt-4 flex flex-col gap-3">
@@ -934,6 +952,25 @@ export default function FacturasPageClient() {
                       )
                     }
                   />
+                  <label
+                    className="flex flex-col gap-1 text-sm font-semibold"
+                    style={{ color: "var(--primary-800)" }}
+                  >
+                    Vencimiento
+                    <input
+                      type="date"
+                      value={editDraft.due_date}
+                      min={editingInvoice.invoice_date}
+                      disabled={savingId === editingInvoice.id}
+                      onChange={(e) =>
+                        setEditDraft((d) =>
+                          d ? { ...d, due_date: e.target.value } : d
+                        )
+                      }
+                      className={inputClass}
+                      style={inputStyle}
+                    />
+                  </label>
                   <label
                     className="flex flex-col gap-1 text-sm font-semibold"
                     style={{ color: "var(--primary-800)" }}
