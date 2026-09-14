@@ -738,7 +738,13 @@ export default function FacturasPageClient() {
               "color-mix(in srgb, var(--primary-600) 6%, var(--background))",
           }}
         >
-          <div className="overflow-x-auto">
+          <div
+            className={
+              !loading && items.length > 10
+                ? "max-h-[min(28rem,52vh)] overflow-auto overscroll-contain"
+                : "overflow-x-auto"
+            }
+          >
             <table className="w-full min-w-[44rem] border-collapse">
               <thead>
                 <tr
@@ -749,89 +755,160 @@ export default function FacturasPageClient() {
                 >
                   {(
                     [
-                      "Proveedor",
-                      "Número",
-                      "Factura",
-                      "Vence",
-                      "Monto",
-                      "Estado",
-                      "",
+                      "PROVEEDOR",
+                      "NÚMERO",
+                      "FACTURA",
+                      "VENCE",
+                      "MONTO",
+                      "ESTADO",
+                      "ACCIONES",
                     ] as const
-                  ).map((h) => (
-                    <th
-                      key={h || "actions"}
-                      className="px-3 py-2.5 text-left text-xs font-bold tracking-wide"
-                    >
-                      {h}
-                    </th>
-                  ))}
+                  ).map((h) => {
+                    const sticky =
+                      !loading && items.length > 10
+                        ? ({
+                            position: "sticky",
+                            top: 0,
+                            zIndex: 2,
+                            backgroundColor: "var(--primary-100)",
+                            boxShadow: "0 1px 0 var(--primary-200)",
+                          } as const)
+                        : {};
+                    return (
+                      <th
+                        key={h}
+                        style={{
+                          borderBottom: "1px solid var(--primary-200)",
+                          borderRight: "1px solid var(--primary-200)",
+                          padding: "14px 16px",
+                          textAlign: h === "ACCIONES" ? "center" : "left",
+                          fontSize: "14px",
+                          fontWeight: 700,
+                          ...sticky,
+                        }}
+                      >
+                        {h}
+                      </th>
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody>
                 {loading && items.length === 0 ? (
-                  <tr>
+                  <tr
+                    style={{
+                      backgroundColor:
+                        "color-mix(in srgb, var(--primary-600) 10%, var(--background))",
+                    }}
+                  >
                     <td
                       colSpan={7}
-                      className="px-3 py-8 text-center text-sm font-medium"
-                      style={{ color: "var(--primary-700)" }}
+                      style={{
+                        borderRight: "1px solid var(--primary-200)",
+                        borderBottom: "1px solid var(--primary-200)",
+                        padding: "14px 16px",
+                        textAlign: "center",
+                        fontSize: "14px",
+                        fontWeight: 600,
+                        color: "var(--primary-700)",
+                      }}
                     >
                       Cargando facturas…
                     </td>
                   </tr>
                 ) : null}
                 {!loading && items.length === 0 ? (
-                  <tr>
+                  <tr
+                    style={{
+                      backgroundColor:
+                        "color-mix(in srgb, var(--primary-600) 10%, var(--background))",
+                    }}
+                  >
                     <td
                       colSpan={7}
-                      className="px-3 py-8 text-center text-sm font-medium"
-                      style={{ color: "var(--primary-700)" }}
+                      style={{
+                        borderRight: "1px solid var(--primary-200)",
+                        borderBottom: "1px solid var(--primary-200)",
+                        padding: "14px 16px",
+                        textAlign: "center",
+                        fontSize: "14px",
+                        fontWeight: 600,
+                        color: "var(--primary-700)",
+                      }}
                     >
                       No hay facturas con estos filtros.
                     </td>
                   </tr>
                 ) : null}
-                {items.map((inv) => {
+                {items.map((inv, idx) => {
                   const colors = statusColors(inv.status);
                   const busy = savingId === inv.id;
+                  const zebra =
+                    idx % 2 === 0
+                      ? "color-mix(in srgb, var(--primary-600) 8%, var(--background))"
+                      : "color-mix(in srgb, var(--primary-600) 14%, var(--background))";
+                  const td = {
+                    borderRight: "1px solid var(--primary-200)",
+                    borderBottom: "1px solid var(--primary-200)",
+                    padding: "14px 16px",
+                    fontSize: "14px",
+                  } as const;
                   return (
                     <tr
                       key={inv.id}
                       style={{
-                        borderTop: "1px solid var(--primary-200)",
+                        backgroundColor: zebra,
                         opacity: loading ? 0.65 : 1,
                       }}
                     >
                       <td
-                        className="px-3 py-2.5 text-sm font-semibold"
-                        style={{ color: "var(--foreground)" }}
+                        style={{
+                          ...td,
+                          color: "var(--foreground)",
+                          fontWeight: 600,
+                        }}
                       >
                         {inv.supplier}
                       </td>
                       <td
-                        className="px-3 py-2.5 text-sm font-semibold tabular-nums"
-                        style={{ color: "var(--foreground)" }}
+                        style={{
+                          ...td,
+                          color: "var(--foreground)",
+                          fontWeight: 600,
+                        }}
                       >
                         {inv.invoice_number}
                       </td>
                       <td
-                        className="px-3 py-2.5 text-sm tabular-nums"
-                        style={{ color: "var(--primary-800)" }}
+                        style={{
+                          ...td,
+                          color:
+                            "color-mix(in srgb, var(--foreground) 82%, var(--primary-500))",
+                          fontWeight: 600,
+                        }}
                       >
                         {formatYmd(inv.invoice_date)}
                       </td>
                       <td
-                        className="px-3 py-2.5 text-sm tabular-nums"
-                        style={{ color: "var(--primary-800)" }}
+                        style={{
+                          ...td,
+                          color:
+                            "color-mix(in srgb, var(--foreground) 82%, var(--primary-500))",
+                          fontWeight: 600,
+                        }}
                       >
                         {formatYmd(inv.due_date)}
                       </td>
                       <td
-                        className="px-3 py-2.5 text-sm font-semibold tabular-nums"
-                        style={{ color: "var(--primary-600)" }}
+                        style={{
+                          ...td,
+                          color: "var(--primary-700)",
+                          fontWeight: 600,
+                        }}
                       >
                         {formatValorCOPTable(inv.amount)}
                       </td>
-                      <td className="px-3 py-2.5">
+                      <td style={td}>
                         <span
                           className="inline-flex rounded-lg border px-2 py-0.5 text-xs font-bold"
                           style={{
@@ -843,12 +920,12 @@ export default function FacturasPageClient() {
                           {statusLabel(inv.status)}
                         </span>
                       </td>
-                      <td className="px-3 py-2.5 text-right">
+                      <td style={{ ...td, textAlign: "center" }}>
                         <button
                           type="button"
                           disabled={busy || loading || editingInvoice != null}
                           onClick={() => startEdit(inv)}
-                          className="rounded-lg px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-60"
+                          className="h-9 rounded-xl px-3 text-xs font-semibold text-white disabled:opacity-60"
                           style={{ backgroundColor: "var(--primary-600)" }}
                         >
                           Editar

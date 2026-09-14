@@ -33,6 +33,34 @@ function IconQr() {
   );
 }
 
+/** N estilizada (inspirada en Nequi, no el logo oficial). */
+function IconNequi() {
+  return (
+    <svg
+      width="22"
+      height="22"
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <rect
+        x="2.6"
+        y="2.6"
+        width="18.8"
+        height="18.8"
+        rx="5.2"
+        stroke="currentColor"
+        strokeWidth="1.85"
+      />
+      <path
+        d="M8.1 16.6V7.4h2.05l4.55 6.55V7.4H16.9v9.2h-2.05L10.3 10.05V16.6H8.1Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
 function IconStats() {
   return (
     <svg
@@ -230,6 +258,7 @@ export default function DashboardSidebar({
   const items: NavItem[] = useMemo(() => {
     const all: NavItem[] = [
       { href: "/dashboard", label: "Pagos QR", icon: <IconQr /> },
+      { href: "/dashboard/nequi", label: "Pagos Nequi", icon: <IconNequi /> },
       { href: "/dashboard/sales", label: "Ventas", icon: <IconPeso /> },
       { href: "/dashboard/horario", label: "Horario", icon: <IconSchedule /> },
       { href: "/dashboard/precios", label: "Ref. Precios", icon: <IconPrices /> },

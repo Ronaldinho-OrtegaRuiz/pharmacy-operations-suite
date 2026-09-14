@@ -23,6 +23,8 @@ type Props = {
   /** false = solo día concreto, sin rango; fechas acotadas por min/max (usuario no admin). */
   fullDateAccess?: boolean;
   dateBounds?: { min: string; max: string };
+  /** Texto junto al filtro cuando fullDateAccess es false. */
+  restrictedHint?: string;
 };
 
 export default function DateFilterControls({
@@ -37,6 +39,7 @@ export default function DateFilterControls({
   disabled,
   fullDateAccess = true,
   dateBounds,
+  restrictedHint = "Solo hoy y 3 días atrás",
 }: Props) {
   const bound =
     !fullDateAccess && dateBounds
@@ -92,7 +95,7 @@ export default function DateFilterControls({
             className="text-xs font-semibold"
             style={{ color: "var(--primary-700)" }}
           >
-            Solo hoy y 3 días atrás
+            {restrictedHint}
           </span>
         )}
       </div>
