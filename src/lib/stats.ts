@@ -281,6 +281,50 @@ export type YearStats = {
 
 export type StatsResponse = MonthStats | YearStats;
 
+/** GET /stats/nequi — solo pagos Nequi ya asignados a la droguería. */
+export type MonthNequiStats = {
+  period: "month";
+  year: number;
+  month: number;
+  drogueria_id: number;
+  divisor_days: number;
+  kpis: {
+    payments_count: number;
+    total_value: string;
+    avg_payments_per_day: string;
+    avg_value_per_day: string;
+    avg_value_per_payment: string | null;
+    min_day: ExtremeDay;
+    max_day: ExtremeDay;
+    days_with_sales: number;
+    days_empty: number;
+    unique_clients: number;
+    vs_previous: VsPrevious;
+  };
+  series: { date: string; count: number; value: string }[];
+};
+
+export type YearNequiStats = {
+  period: "year";
+  year: number;
+  drogueria_id: number;
+  divisor_months: number;
+  kpis: {
+    payments_count: number;
+    total_value: string;
+    avg_payments_per_month: string;
+    avg_value_per_month: string;
+    avg_value_per_payment: string | null;
+    best_month: ExtremeMonth;
+    worst_month: ExtremeMonth;
+    unique_clients: number;
+    vs_previous: VsPrevious;
+  };
+  series: { month: number; count: number; value: string }[];
+};
+
+export type NequiStatsResponse = MonthNequiStats | YearNequiStats;
+
 export type StatsQueryParams = {
   drogueria_id: number;
   period: "month" | "year";
@@ -1110,6 +1154,141 @@ export async function getStats(
       ok: false,
       status: 422,
       body: { detail: "Respuesta de estadísticas inválida." },
+    };
+  }
+  return { ok: true, data };
+}
+
+function parseMonthNequiStats(raw: Record<string, unknown>): MonthNequiStats | null {
+  if (typeof raw.year !== "number" || typeof raw.month !== "number") return null;
+  if (typeof raw.drogueria_id !== "number") return null;
+  if (typeof raw.divisor_days !== "number") return null;
+  if (!raw.kpis || typeof raw.kpis !== "object") return null;
+  if (!Array.isArray(raw.series)) return null;
+  const k = raw.kpis as Record<string, unknown>;
+  const total = asMoneyString(k.total_value);
+  const avgPayDay = asMoneyString(k.avg_payments_per_day);
+  const avgValDay = asMoneyString(k.avg_value_per_day);
+  if (total == null || avgPayDay == null || avgValDay == null) return null;
+  if (typeof k.payments_count !== "number") return null;
+
+  const series: MonthNequiStats["series"] = [];
+  for (const row of raw.series) {
+    if (!row || typeof row !== "object") continue;
+    const o = row as Record<string, unknown>;
+    if (typeof o.date !== "string" || typeof o.count !== "number") continue;
+    const value = asMoneyString(o.value);
+    if (value == null) continue;
+    series.push({ date: o.date, count: o.count, value });
+  }
+
+  return {
+    period: "month",
+    year: raw.year,
+    month: raw.month,
+    drogueria_id: raw.drogueria_id,
+    divisor_days: raw.divisor_days,
+    kpis: {
+      payments_count: k.payments_count,
+      total_value: total,
+      avg_payments_per_day: avgPayDay,
+      avg_value_per_day: avgValDay,
+      avg_value_per_payment:
+        k.avg_value_per_payment == null
+          ? null
+          : asMoneyString(k.avg_value_per_payment),
+      min_day: parseExtremeDay(k.min_day),
+      max_day: parseExtremeDay(k.max_day),
+      days_with_sales:
+        typeof k.days_with_sales === "number" ? k.days_with_sales : 0,
+      days_empty: typeof k.days_empty === "number" ? k.days_empty : 0,
+      unique_clients:
+        typeof k.unique_clients === "number" ? k.unique_clients : 0,
+      vs_previous: parseVsPrevious(k.vs_previous),
+    },
+    series,
+  };
+}
+
+function parseYearNequiStats(raw: Record<string, unknown>): YearNequiStats | null {
+  if (typeof raw.year !== "number") return null;
+  if (typeof raw.drogueria_id !== "number") return null;
+  if (typeof raw.divisor_months !== "number") return null;
+  if (!raw.kpis || typeof raw.kpis !== "object") return null;
+  if (!Array.isArray(raw.series)) return null;
+  const k = raw.kpis as Record<string, unknown>;
+  const total = asMoneyString(k.total_value);
+  const avgPayMonth = asMoneyString(k.avg_payments_per_month);
+  const avgValMonth = asMoneyString(k.avg_value_per_month);
+  if (total == null || avgPayMonth == null || avgValMonth == null) return null;
+  if (typeof k.payments_count !== "number") return null;
+
+  const series: YearNequiStats["series"] = [];
+  for (const row of raw.series) {
+    if (!row || typeof row !== "object") continue;
+    const o = row as Record<string, unknown>;
+    if (typeof o.month !== "number" || typeof o.count !== "number") continue;
+    const value = asMoneyString(o.value);
+    if (value == null) continue;
+    series.push({ month: o.month, count: o.count, value });
+  }
+
+  return {
+    period: "year",
+    year: raw.year,
+    drogueria_id: raw.drogueria_id,
+    divisor_months: raw.divisor_months,
+    kpis: {
+      payments_count: k.payments_count,
+      total_value: total,
+      avg_payments_per_month: avgPayMonth,
+      avg_value_per_month: avgValMonth,
+      avg_value_per_payment:
+        k.avg_value_per_payment == null
+          ? null
+          : asMoneyString(k.avg_value_per_payment),
+      best_month: parseExtremeMonth(k.best_month),
+      worst_month: parseExtremeMonth(k.worst_month),
+      unique_clients:
+        typeof k.unique_clients === "number" ? k.unique_clients : 0,
+      vs_previous: parseVsPrevious(k.vs_previous),
+    },
+    series,
+  };
+}
+
+export function parseNequiStatsResponse(body: unknown): NequiStatsResponse | null {
+  if (!body || typeof body !== "object") return null;
+  const raw = body as Record<string, unknown>;
+  if (raw.period === "month") return parseMonthNequiStats(raw);
+  if (raw.period === "year") return parseYearNequiStats(raw);
+  return null;
+}
+
+/** GET /stats/nequi — KPIs + series de Nequi asignados. */
+export async function getNequiStats(
+  params: StatsQueryParams
+): Promise<
+  | { ok: true; data: NequiStatsResponse }
+  | { ok: false; status: number; body: unknown }
+> {
+  const url = `${getApiBaseUrl()}/stats/nequi${buildStatsQuery(params)}`;
+  const res = await fetchWithAuth(url, { method: "GET" });
+  let body: unknown = {};
+  try {
+    body = await res.json();
+  } catch {
+    body = {};
+  }
+  if (!res.ok) {
+    return { ok: false, status: res.status, body };
+  }
+  const data = parseNequiStatsResponse(body);
+  if (!data) {
+    return {
+      ok: false,
+      status: 422,
+      body: { detail: "Respuesta de estadísticas Nequi inválida." },
     };
   }
   return { ok: true, data };

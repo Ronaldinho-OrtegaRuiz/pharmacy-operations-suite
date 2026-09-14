@@ -6,9 +6,11 @@ import { formatValorCOPTable, parseMoneyFromApi } from "@/lib/money-format";
 import { todayYmdInTz } from "@/lib/payment-date-bounds";
 import { detailFromBody } from "@/lib/payments";
 import {
+  getNequiStats,
   getStats,
   type ExtremeDay,
   type ExtremeMonth,
+  type NequiStatsResponse,
   type ShiftDayExtreme,
   type ShiftMonthExtreme,
   type StatsResponse,
@@ -19,6 +21,7 @@ import StoreBadges from "../payments/StoreBadges";
 import { useSelectedDrogueria } from "@/lib/use-selected-drogueria";
 import StatsEmployeesSection from "./StatsEmployeesSection";
 import StatsInvoicesSection from "./StatsInvoicesSection";
+import StatsNequiSection from "./StatsNequiSection";
 import { PaymentsLineChart, StackedShiftBarChart, ValueBarChart } from "./StatsCharts";
 
 const MONTH_NAMES_ES = [
@@ -36,7 +39,7 @@ const MONTH_NAMES_ES = [
   "Diciembre",
 ] as const;
 
-type StatsMetric = "qr" | "sales" | "invoices" | "employees";
+type StatsMetric = "qr" | "nequi" | "sales" | "invoices" | "employees";
 type StatsPeriod = "month" | "year";
 
 const selectClass =
@@ -261,6 +264,8 @@ export default function StatsPageClient() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<StatsResponse | null>(null);
+  const [nequiData, setNequiData] = useState<NequiStatsResponse | null>(null);
+  const [nequiError, setNequiError] = useState<string | null>(null);
 
   const yearOptions = useMemo(() => {
     const years: number[] = [];
@@ -271,33 +276,57 @@ export default function StatsPageClient() {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setNequiError(null);
+    const query = {
+      drogueria_id: drogueriaId,
+      period,
+      year,
+      month: period === "month" ? month : undefined,
+    };
     try {
-      const res = await getStats({
-        drogueria_id: drogueriaId,
-        period,
-        year,
-        month: period === "month" ? month : undefined,
-      });
-      if (!res.ok) {
-        if (res.status === 401) {
+      const [statsRes, nequiRes] = await Promise.all([
+        getStats(query),
+        getNequiStats(query),
+      ]);
+
+      if (!statsRes.ok) {
+        if (statsRes.status === 401) {
           removeToken();
           toast.show("Sesión expirada. Inicia sesión de nuevo.", "error");
           router.replace("/login");
           return;
         }
         const msg =
-          detailFromBody(res.body) ??
-          (res.status === 404
+          detailFromBody(statsRes.body) ??
+          (statsRes.status === 404
             ? "Droguería no encontrada."
             : "No se pudieron cargar las estadísticas.");
         setError(msg);
         setData(null);
-        return;
+      } else {
+        setData(statsRes.data);
       }
-      setData(res.data);
+
+      if (!nequiRes.ok) {
+        if (nequiRes.status === 401) {
+          removeToken();
+          toast.show("Sesión expirada. Inicia sesión de nuevo.", "error");
+          router.replace("/login");
+          return;
+        }
+        setNequiError(
+          detailFromBody(nequiRes.body) ??
+            "No se pudieron cargar las estadísticas Nequi."
+        );
+        setNequiData(null);
+      } else {
+        setNequiData(nequiRes.data);
+      }
     } catch {
       setError("Error de red al cargar estadísticas.");
+      setNequiError("Error de red al cargar estadísticas Nequi.");
       setData(null);
+      setNequiData(null);
     } finally {
       setLoading(false);
     }
@@ -308,18 +337,22 @@ export default function StatsPageClient() {
   }, [load]);
 
   const periodTitle = useMemo(() => {
-    if (!data) return "";
-    if (data.period === "month") {
-      const name = MONTH_NAMES_ES[data.month - 1] ?? `Mes ${data.month}`;
-      return `${name} ${data.year}`;
+    const src = metric === "nequi" ? nequiData : data;
+    if (!src) return "";
+    if (src.period === "month") {
+      const name = MONTH_NAMES_ES[src.month - 1] ?? `Mes ${src.month}`;
+      return `${name} ${src.year}`;
     }
-    return `Año ${data.year}`;
-  }, [data]);
+    return `Año ${src.year}`;
+  }, [data, metric, nequiData]);
 
   const monthLabelsShort = MONTH_NAMES_ES.map((n) => n.slice(0, 3));
+  const activeError = metric === "nequi" ? nequiError : error;
+  const hasActiveData =
+    metric === "nequi" ? nequiData != null : data != null;
 
   return (
-    <section aria-label="Estadísticas QR, ventas y facturas" className="w-full max-w-5xl pb-8">
+    <section aria-label="Estadísticas QR, Nequi, ventas y facturas" className="w-full max-w-5xl pb-8">
       <h1
         className="text-2xl font-bold"
         style={{ color: "var(--primary-800)" }}
@@ -327,7 +360,7 @@ export default function StatsPageClient() {
         Estadísticas
       </h1>
       <p className="mt-1 text-sm" style={{ color: "var(--primary-700)" }}>
-        Pagos QR, ventas de caja, facturas y empleados por mes o año.
+        Pagos QR, Nequi, ventas de caja, facturas y empleados por mes o año.
       </p>
 
       <div className="mt-6 w-full max-w-4xl">
@@ -346,6 +379,7 @@ export default function StatsPageClient() {
           onChange={setMetric}
           options={[
             { id: "qr", label: "Pagos QR" },
+            { id: "nequi", label: "Pagos Nequi" },
             { id: "sales", label: "Ventas" },
             { id: "invoices", label: "Facturas" },
             { id: "employees", label: "Empleados" },
@@ -416,7 +450,7 @@ export default function StatsPageClient() {
         </div>
       </div>
 
-      {error ? (
+      {activeError ? (
         <div
           className="mt-6 rounded-xl border px-4 py-3 text-sm font-medium"
           style={{
@@ -426,11 +460,23 @@ export default function StatsPageClient() {
             color: "var(--foreground)",
           }}
         >
-          {error}
+          {activeError}
         </div>
       ) : null}
 
-      {!error && data ? (
+      {metric === "nequi" && nequiData ? (
+        <div className="mt-8 flex flex-col gap-10">
+          <StatsNequiSection periodTitle={periodTitle} data={nequiData} />
+          <p
+            className="text-xs font-medium"
+            style={{ color: "var(--primary-700)" }}
+          >
+            Solo entran pagos Nequi con droguería asignada.
+          </p>
+        </div>
+      ) : null}
+
+      {metric !== "nequi" && !error && data ? (
         <div className="mt-8 flex flex-col gap-10">
           {metric === "qr" && data.period === "month" ? (
             <>
@@ -801,7 +847,7 @@ export default function StatsPageClient() {
         </div>
       ) : null}
 
-      {!error && !data && loading ? (
+      {!activeError && !hasActiveData && loading ? (
         <p
           className="mt-8 text-sm font-medium"
           style={{ color: "var(--primary-700)" }}
