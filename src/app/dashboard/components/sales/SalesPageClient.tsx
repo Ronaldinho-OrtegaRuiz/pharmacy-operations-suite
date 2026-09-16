@@ -24,6 +24,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import DateFilterControls from "../payments/DateFilterControls";
 import StoreBadges from "../payments/StoreBadges";
 import { useSelectedDrogueria } from "@/lib/use-selected-drogueria";
+import { cajaShiftHoursFor } from "@/lib/caja-shift-hours";
 import DaySalesCard from "./DaySalesCard";
 import SalesMonthCalendar from "./SalesMonthCalendar";
 import SalesViewToggle, { type SalesAdminView } from "./SalesViewToggle";
@@ -210,7 +211,8 @@ export default function SalesPageClient() {
         Ventas
       </h1>
       <p className="mt-1 text-sm" style={{ color: "var(--primary-700)" }}>
-        Un eslabón por día. Al salir del campo se guarda ese turno.
+        Solo el número, sin puntos ni comas (ej. 150000). Guardá con Enter o
+        haciendo clic afuera.
       </p>
 
       <div className="mt-6 w-full max-w-4xl">
@@ -219,6 +221,35 @@ export default function SalesPageClient() {
           onDrogueriaChange={setDrogueriaId}
         />
       </div>
+
+      {cajaShiftHoursFor(drogueriaId).length > 0 ? (
+        <div
+          className="mt-4 w-full max-w-4xl rounded-2xl border px-4 py-3"
+          style={{
+            borderColor: "var(--primary-200)",
+            backgroundColor:
+              "color-mix(in srgb, var(--primary-600) 8%, var(--background))",
+          }}
+        >
+          <p
+            className="text-sm font-bold"
+            style={{ color: "var(--primary-800)" }}
+          >
+            Horarios de turnos de caja
+          </p>
+          <ul className="mt-2 flex flex-col gap-1">
+            {cajaShiftHoursFor(drogueriaId).map((s) => (
+              <li
+                key={s.shift_no}
+                className="text-sm font-semibold"
+                style={{ color: "var(--primary-700)" }}
+              >
+                T{s.shift_no}: {s.label}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       <div className="mt-6 flex w-full max-w-4xl flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0 flex-1">

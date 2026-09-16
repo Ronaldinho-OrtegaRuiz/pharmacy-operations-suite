@@ -17,6 +17,8 @@ export type PaymentItem = {
 export type PaymentListResponse = {
   items: PaymentItem[];
   total: number;
+  /** Suma monetaria de todos los pagos del filtro (no solo la página). */
+  value_total: string;
   page: number;
   page_size: number;
   pages: number;
@@ -81,6 +83,10 @@ export async function getPayments(
     data: {
       items: Array.isArray(data.items) ? data.items : [],
       total: typeof data.total === "number" ? data.total : 0,
+      value_total:
+        typeof data.value_total === "string" && data.value_total.trim()
+          ? data.value_total.trim()
+          : "0.00",
       page: typeof data.page === "number" ? data.page : 1,
       page_size: typeof data.page_size === "number" ? data.page_size : 10,
       pages: typeof data.pages === "number" ? data.pages : 0,

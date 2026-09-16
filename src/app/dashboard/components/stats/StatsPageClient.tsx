@@ -277,60 +277,89 @@ export default function StatsPageClient() {
     setLoading(true);
     setError(null);
     setNequiError(null);
-    const query = {
+
+    const sectionsForMetric = (m: StatsMetric): string | undefined => {
+      switch (m) {
+        case "qr":
+          return "qr,compare";
+        case "sales":
+          return "sales,compare";
+        case "invoices":
+          return "invoices";
+        case "employees":
+          return "employees";
+        case "nequi":
+          return undefined;
+        default:
+          return undefined;
+      }
+    };
+
+    const baseQuery = {
       drogueria_id: drogueriaId,
       period,
       year,
       month: period === "month" ? month : undefined,
     };
+
     try {
-      const [statsRes, nequiRes] = await Promise.all([
-        getStats(query),
-        getNequiStats(query),
-      ]);
-
-      if (!statsRes.ok) {
-        if (statsRes.status === 401) {
-          removeToken();
-          toast.show("Sesión expirada. Inicia sesión de nuevo.", "error");
-          router.replace("/login");
-          return;
-        }
-        const msg =
-          detailFromBody(statsRes.body) ??
-          (statsRes.status === 404
-            ? "Droguería no encontrada."
-            : "No se pudieron cargar las estadísticas.");
-        setError(msg);
+      if (metric === "nequi") {
         setData(null);
-      } else {
-        setData(statsRes.data);
-      }
-
-      if (!nequiRes.ok) {
-        if (nequiRes.status === 401) {
-          removeToken();
-          toast.show("Sesión expirada. Inicia sesión de nuevo.", "error");
-          router.replace("/login");
-          return;
+        setError(null);
+        const nequiRes = await getNequiStats(baseQuery);
+        if (!nequiRes.ok) {
+          if (nequiRes.status === 401) {
+            removeToken();
+            toast.show("Sesión expirada. Inicia sesión de nuevo.", "error");
+            router.replace("/login");
+            return;
+          }
+          setNequiError(
+            detailFromBody(nequiRes.body) ??
+              "No se pudieron cargar las estadísticas Nequi."
+          );
+          setNequiData(null);
+        } else {
+          setNequiData(nequiRes.data);
+          setNequiError(null);
         }
-        setNequiError(
-          detailFromBody(nequiRes.body) ??
-            "No se pudieron cargar las estadísticas Nequi."
-        );
-        setNequiData(null);
       } else {
-        setNequiData(nequiRes.data);
+        setNequiData(null);
+        setNequiError(null);
+        const statsRes = await getStats({
+          ...baseQuery,
+          sections: sectionsForMetric(metric),
+        });
+        if (!statsRes.ok) {
+          if (statsRes.status === 401) {
+            removeToken();
+            toast.show("Sesión expirada. Inicia sesión de nuevo.", "error");
+            router.replace("/login");
+            return;
+          }
+          const msg =
+            detailFromBody(statsRes.body) ??
+            (statsRes.status === 404
+              ? "Droguería no encontrada."
+              : "No se pudieron cargar las estadísticas.");
+          setError(msg);
+          setData(null);
+        } else {
+          setData(statsRes.data);
+        }
       }
     } catch {
-      setError("Error de red al cargar estadísticas.");
-      setNequiError("Error de red al cargar estadísticas Nequi.");
-      setData(null);
-      setNequiData(null);
+      if (metric === "nequi") {
+        setNequiError("Error de red al cargar estadísticas Nequi.");
+        setNequiData(null);
+      } else {
+        setError("Error de red al cargar estadísticas.");
+        setData(null);
+      }
     } finally {
       setLoading(false);
     }
-  }, [drogueriaId, month, period, router, toast, year]);
+  }, [drogueriaId, metric, month, period, router, toast, year]);
 
   useEffect(() => {
     void load();
@@ -478,7 +507,7 @@ export default function StatsPageClient() {
 
       {metric !== "nequi" && !error && data ? (
         <div className="mt-8 flex flex-col gap-10">
-          {metric === "qr" && data.period === "month" ? (
+          {metric === "qr" && data.qr && data.period === "month" ? (
             <>
               <ChartCard
                 title={`${periodTitle} — Pagos QR por día`}
@@ -562,7 +591,7 @@ export default function StatsPageClient() {
             </>
           ) : null}
 
-          {metric === "qr" && data.period === "year" ? (
+          {metric === "qr" && data.qr && data.period === "year" ? (
             <>
               <ChartCard
                 title={`${periodTitle} — Pagos QR por mes`}
@@ -642,7 +671,7 @@ export default function StatsPageClient() {
             </>
           ) : null}
 
-          {metric === "sales" && data.period === "month" ? (
+          {metric === "sales" && data.sales && data.period === "month" ? (
             <ChartCard
               title={`${periodTitle} — Ventas (caja) por día`}
               hint="Cada barra se divide por turnos. Pasa el mouse por un bloque: valor de ese turno y total del día."
@@ -721,7 +750,7 @@ export default function StatsPageClient() {
             </ChartCard>
           ) : null}
 
-          {metric === "sales" && data.period === "year" ? (
+          {metric === "sales" && data.sales && data.period === "year" ? (
             <ChartCard
               title={`${periodTitle} — Ventas (caja) por mes`}
               hint="Las barras muestran el total del mes. El detalle por turno está en las tarjetas."
@@ -799,51 +828,53 @@ export default function StatsPageClient() {
             <StatsEmployeesSection periodTitle={periodTitle} data={data} />
           ) : null}
 
-          <article
-            className="w-full rounded-2xl border p-5 shadow-sm"
-            style={{
-              borderColor: "var(--primary-200)",
-              backgroundColor:
-                "color-mix(in srgb, var(--primary-600) 8%, var(--background))",
-            }}
-          >
-            <h2
-              className="text-lg font-bold"
-              style={{ color: "var(--primary-700)" }}
+          {data.compare ? (
+            <article
+              className="w-full rounded-2xl border p-5 shadow-sm"
+              style={{
+                borderColor: "var(--primary-200)",
+                backgroundColor:
+                  "color-mix(in srgb, var(--primary-600) 8%, var(--background))",
+              }}
             >
-              {periodTitle} — QR vs caja
-            </h2>
-            <div className="mt-3 flex flex-wrap gap-3">
-              <KpiChip
-                label="Total QR:"
-                value={moneyFromApi(data.compare.qr_total)}
-              />
-              <KpiChip
-                label="Total caja:"
-                value={moneyFromApi(data.compare.sales_total)}
-              />
-              <KpiChip
-                label="Delta (caja − QR):"
-                value={moneyFromApi(data.compare.delta)}
-              />
-              <KpiChip
-                label="Participación QR / caja:"
-                value={formatShare(data.compare.qr_share)}
-              />
-              {data.compare.invoices_issued != null ? (
+              <h2
+                className="text-lg font-bold"
+                style={{ color: "var(--primary-700)" }}
+              >
+                {periodTitle} — QR vs caja
+              </h2>
+              <div className="mt-3 flex flex-wrap gap-3">
                 <KpiChip
-                  label="Facturas emitidas (período):"
-                  value={moneyFromApi(data.compare.invoices_issued)}
+                  label="Total QR:"
+                  value={moneyFromApi(data.compare.qr_total)}
                 />
-              ) : null}
-              {data.compare.invoices_open_now != null ? (
                 <KpiChip
-                  label="Por pagar hoy:"
-                  value={moneyFromApi(data.compare.invoices_open_now)}
+                  label="Total caja:"
+                  value={moneyFromApi(data.compare.sales_total)}
                 />
-              ) : null}
-            </div>
-          </article>
+                <KpiChip
+                  label="Delta (caja − QR):"
+                  value={moneyFromApi(data.compare.delta)}
+                />
+                <KpiChip
+                  label="Participación QR / caja:"
+                  value={formatShare(data.compare.qr_share)}
+                />
+                {data.compare.invoices_issued != null ? (
+                  <KpiChip
+                    label="Facturas emitidas (período):"
+                    value={moneyFromApi(data.compare.invoices_issued)}
+                  />
+                ) : null}
+                {data.compare.invoices_open_now != null ? (
+                  <KpiChip
+                    label="Por pagar hoy:"
+                    value={moneyFromApi(data.compare.invoices_open_now)}
+                  />
+                ) : null}
+              </div>
+            </article>
+          ) : null}
         </div>
       ) : null}
 

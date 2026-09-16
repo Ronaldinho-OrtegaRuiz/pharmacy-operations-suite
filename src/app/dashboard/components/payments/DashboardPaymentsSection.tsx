@@ -2,6 +2,7 @@
 
 import { useToast } from "@/components/ToastProvider";
 import { getAuthUsername, getToken, removeToken } from "@/lib/auth-storage";
+import { formatValorCOPTable } from "@/lib/money-format";
 import {
   clampPaymentsDateQueryPart,
   clampYmd,
@@ -87,6 +88,7 @@ export default function DashboardPaymentsSection() {
 
   const [items, setItems] = useState<PaymentItem[]>([]);
   const [total, setTotal] = useState(0);
+  const [valueTotal, setValueTotal] = useState("0.00");
   const [pages, setPages] = useState(1);
   const [loading, setLoading] = useState(true);
 
@@ -160,13 +162,15 @@ export default function DashboardPaymentsSection() {
         toast.show(msg, "error");
         setItems([]);
         setTotal(0);
+        setValueTotal("0.00");
         setPages(1);
         return;
       }
 
-      const { items: list, total: t, pages: pg } = result.data;
+      const { items: list, total: t, value_total: vt, pages: pg } = result.data;
       setItems(list);
       setTotal(t);
+      setValueTotal(vt);
       const effectivePages =
         t === 0 ? 1 : Math.max(1, pg);
       setPages(effectivePages);
@@ -348,6 +352,34 @@ export default function DashboardPaymentsSection() {
           </button>
         </div>
 
+        <div
+          className="flex flex-wrap items-baseline justify-between gap-2 rounded-2xl border px-4 py-3"
+          style={{
+            borderColor: "var(--primary-200)",
+            backgroundColor:
+              "color-mix(in srgb, var(--primary-600) 10%, var(--background))",
+          }}
+        >
+          <p
+            className="text-sm font-semibold"
+            style={{ color: "var(--primary-700)" }}
+          >
+            {totalLabel}
+          </p>
+          <p
+            className="text-lg font-bold tabular-nums"
+            style={{ color: "var(--primary-600)" }}
+          >
+            {formatValorCOPTable(valueTotal)}
+            <span
+              className="ml-2 text-sm font-semibold"
+              style={{ color: "var(--primary-700)" }}
+            >
+              · {total} pago{total === 1 ? "" : "s"}
+            </span>
+          </p>
+        </div>
+
         <ClientsTable
           items={items}
           page={page}
@@ -364,7 +396,7 @@ export default function DashboardPaymentsSection() {
           onPageChange={setPage}
           onPageSizeChange={handlePageSizeChange}
           loading={loading}
-          totalLabel={totalLabel}
+          totalLabel="Cantidad"
         />
       </div>
     </div>

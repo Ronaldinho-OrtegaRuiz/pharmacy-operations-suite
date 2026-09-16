@@ -197,7 +197,7 @@ export type MonthStats = {
   drogueria_id: number;
   shift_count: number;
   divisor_days: number;
-  qr: {
+  qr?: {
     kpis: {
       payments_count: number;
       total_value: string;
@@ -213,7 +213,7 @@ export type MonthStats = {
     };
     series: { date: string; count: number; value: string }[];
   };
-  sales: {
+  sales?: {
     kpis: {
       total_value: string;
       avg_value_per_day: string;
@@ -236,7 +236,7 @@ export type MonthStats = {
   };
   invoices?: MonthInvoices;
   employees?: MonthEmployees;
-  compare: StatsCompare;
+  compare?: StatsCompare;
 };
 
 export type YearStats = {
@@ -245,7 +245,7 @@ export type YearStats = {
   drogueria_id: number;
   shift_count: number;
   divisor_months: number;
-  qr: {
+  qr?: {
     kpis: {
       payments_count: number;
       total_value: string;
@@ -259,7 +259,7 @@ export type YearStats = {
     };
     series: { month: number; count: number; value: string }[];
   };
-  sales: {
+  sales?: {
     kpis: {
       total_value: string;
       avg_value_per_month: string;
@@ -276,7 +276,7 @@ export type YearStats = {
   };
   invoices?: YearInvoices;
   employees?: YearEmployees;
-  compare: StatsCompare;
+  compare?: StatsCompare;
 };
 
 export type StatsResponse = MonthStats | YearStats;
@@ -330,6 +330,8 @@ export type StatsQueryParams = {
   period: "month" | "year";
   year?: number;
   month?: number;
+  /** csv: qr,sales,invoices,employees,compare — sin esto el API manda todas. */
+  sections?: string;
 };
 
 function buildStatsQuery(params: StatsQueryParams): string {
@@ -339,6 +341,9 @@ function buildStatsQuery(params: StatsQueryParams): string {
   if (params.year != null) sp.set("year", String(params.year));
   if (params.period === "month" && params.month != null) {
     sp.set("month", String(params.month));
+  }
+  if (params.sections != null && params.sections.trim()) {
+    sp.set("sections", params.sections.trim());
   }
   return `?${sp.toString()}`;
 }
@@ -868,98 +873,43 @@ function parseMonthStats(raw: Record<string, unknown>): MonthStats | null {
   if (typeof raw.drogueria_id !== "number") return null;
   if (typeof raw.shift_count !== "number") return null;
   if (typeof raw.divisor_days !== "number") return null;
-  if (!raw.qr || typeof raw.qr !== "object") return null;
-  if (!raw.sales || typeof raw.sales !== "object") return null;
 
-  const qr = raw.qr as Record<string, unknown>;
-  const sales = raw.sales as Record<string, unknown>;
-  if (!qr.kpis || typeof qr.kpis !== "object") return null;
-  if (!sales.kpis || typeof sales.kpis !== "object") return null;
-  if (!Array.isArray(qr.series) || !Array.isArray(sales.series)) return null;
-
-  const qk = qr.kpis as Record<string, unknown>;
-  const sk = sales.kpis as Record<string, unknown>;
-  const total_value = asMoneyString(qk.total_value);
-  const avg_payments_per_day = asPct(qk.avg_payments_per_day);
-  const avg_value_per_day = asMoneyString(qk.avg_value_per_day);
-  if (
-    typeof qk.payments_count !== "number" ||
-    total_value == null ||
-    avg_payments_per_day == null ||
-    avg_value_per_day == null
-  ) {
-    return null;
-  }
-
-  const qrSeries = qr.series
-    .map((row) => {
-      if (!row || typeof row !== "object") return null;
-      const o = row as Record<string, unknown>;
-      const value = asMoneyString(o.value);
-      if (typeof o.date !== "string" || typeof o.count !== "number" || value == null) {
-        return null;
-      }
-      return { date: o.date, count: o.count, value };
-    })
-    .filter((x): x is { date: string; count: number; value: string } => x != null);
-
-  const salesTotal = asMoneyString(sk.total_value);
-  const salesAvg = asMoneyString(sk.avg_value_per_day);
-  if (salesTotal == null || salesAvg == null) return null;
-
-  const salesSeries = sales.series
-    .map((row) => {
-      if (!row || typeof row !== "object") return null;
-      const o = row as Record<string, unknown>;
-      const total = asMoneyString(o.total);
-      if (typeof o.date !== "string" || total == null || !Array.isArray(o.shifts)) {
-        return null;
-      }
-      const shifts = o.shifts
-        .map((s) => {
-          if (!s || typeof s !== "object") return null;
-          const sh = s as Record<string, unknown>;
-          if (typeof sh.shift_no !== "number") return null;
-          const amount =
-            sh.amount == null ? null : asMoneyString(sh.amount);
-          if (sh.amount != null && amount == null) return null;
-          return { shift_no: sh.shift_no, amount };
-        })
-        .filter(
-          (x): x is { shift_no: number; amount: string | null } => x != null
-        );
-      return { date: o.date, total, shifts };
-    })
-    .filter(
-      (
-        x
-      ): x is {
-        date: string;
-        total: string;
-        shifts: { shift_no: number; amount: string | null }[];
-      } => x != null
-    );
-
-  const by_shift = Array.isArray(sk.by_shift)
-    ? sk.by_shift
-        .map(parseShiftKpi)
-        .filter((x): x is ShiftKpi => x != null)
-    : [];
-
-  const compare = parseCompare(raw.compare);
-  if (!compare) return null;
-
-  const invoices = parseMonthInvoices(raw.invoices) ?? undefined;
-  const employees = parseMonthEmployees(raw.employees) ?? undefined;
-
-  return {
-    period: "month",
-    year: raw.year,
-    month: raw.month,
-    drogueria_id: raw.drogueria_id,
-    shift_count: raw.shift_count,
-    divisor_days: raw.divisor_days,
-    qr: {
+  let qr: MonthStats["qr"];
+  if (raw.qr != null && typeof raw.qr === "object") {
+    const q = raw.qr as Record<string, unknown>;
+    if (!q.kpis || typeof q.kpis !== "object" || !Array.isArray(q.series)) {
+      return null;
+    }
+    const qk = q.kpis as Record<string, unknown>;
+    const total_value = asMoneyString(qk.total_value);
+    const avg_payments_per_day = asPct(qk.avg_payments_per_day);
+    const avg_value_per_day = asMoneyString(qk.avg_value_per_day);
+    if (
+      typeof qk.payments_count !== "number" ||
+      total_value == null ||
+      avg_payments_per_day == null ||
+      avg_value_per_day == null
+    ) {
+      return null;
+    }
+    const qrSeries = q.series
+      .map((row) => {
+        if (!row || typeof row !== "object") return null;
+        const o = row as Record<string, unknown>;
+        const value = asMoneyString(o.value);
+        if (
+          typeof o.date !== "string" ||
+          typeof o.count !== "number" ||
+          value == null
+        ) {
+          return null;
+        }
+        return { date: o.date, count: o.count, value };
+      })
+      .filter(
+        (x): x is { date: string; count: number; value: string } => x != null
+      );
+    qr = {
       kpis: {
         payments_count: qk.payments_count,
         total_value,
@@ -979,8 +929,61 @@ function parseMonthStats(raw: Record<string, unknown>): MonthStats | null {
         vs_previous: parseVsPrevious(qk.vs_previous),
       },
       series: qrSeries,
-    },
-    sales: {
+    };
+  }
+
+  let sales: MonthStats["sales"];
+  if (raw.sales != null && typeof raw.sales === "object") {
+    const s = raw.sales as Record<string, unknown>;
+    if (!s.kpis || typeof s.kpis !== "object" || !Array.isArray(s.series)) {
+      return null;
+    }
+    const sk = s.kpis as Record<string, unknown>;
+    const salesTotal = asMoneyString(sk.total_value);
+    const salesAvg = asMoneyString(sk.avg_value_per_day);
+    if (salesTotal == null || salesAvg == null) return null;
+    const salesSeries = s.series
+      .map((row) => {
+        if (!row || typeof row !== "object") return null;
+        const o = row as Record<string, unknown>;
+        const total = asMoneyString(o.total);
+        if (
+          typeof o.date !== "string" ||
+          total == null ||
+          !Array.isArray(o.shifts)
+        ) {
+          return null;
+        }
+        const shifts = o.shifts
+          .map((shRaw) => {
+            if (!shRaw || typeof shRaw !== "object") return null;
+            const sh = shRaw as Record<string, unknown>;
+            if (typeof sh.shift_no !== "number") return null;
+            const amount =
+              sh.amount == null ? null : asMoneyString(sh.amount);
+            if (sh.amount != null && amount == null) return null;
+            return { shift_no: sh.shift_no, amount };
+          })
+          .filter(
+            (x): x is { shift_no: number; amount: string | null } => x != null
+          );
+        return { date: o.date, total, shifts };
+      })
+      .filter(
+        (
+          x
+        ): x is {
+          date: string;
+          total: string;
+          shifts: { shift_no: number; amount: string | null }[];
+        } => x != null
+      );
+    const by_shift = Array.isArray(sk.by_shift)
+      ? sk.by_shift
+          .map(parseShiftKpi)
+          .filter((x): x is ShiftKpi => x != null)
+      : [];
+    sales = {
       kpis: {
         total_value: salesTotal,
         avg_value_per_day: salesAvg,
@@ -996,7 +999,22 @@ function parseMonthStats(raw: Record<string, unknown>): MonthStats | null {
         vs_previous: parseVsPrevious(sk.vs_previous),
       },
       series: salesSeries,
-    },
+    };
+  }
+
+  const compare = parseCompare(raw.compare) ?? undefined;
+  const invoices = parseMonthInvoices(raw.invoices) ?? undefined;
+  const employees = parseMonthEmployees(raw.employees) ?? undefined;
+
+  return {
+    period: "month",
+    year: raw.year,
+    month: raw.month,
+    drogueria_id: raw.drogueria_id,
+    shift_count: raw.shift_count,
+    divisor_days: raw.divisor_days,
+    qr,
+    sales,
     invoices,
     employees,
     compare,
@@ -1010,80 +1028,43 @@ function parseYearStats(raw: Record<string, unknown>): YearStats | null {
   }
   if (typeof raw.shift_count !== "number") return null;
   if (typeof raw.divisor_months !== "number") return null;
-  if (!raw.qr || typeof raw.qr !== "object") return null;
-  if (!raw.sales || typeof raw.sales !== "object") return null;
 
-  const qr = raw.qr as Record<string, unknown>;
-  const sales = raw.sales as Record<string, unknown>;
-  if (!qr.kpis || typeof qr.kpis !== "object") return null;
-  if (!sales.kpis || typeof sales.kpis !== "object") return null;
-  if (!Array.isArray(qr.series) || !Array.isArray(sales.series)) return null;
-
-  const qk = qr.kpis as Record<string, unknown>;
-  const sk = sales.kpis as Record<string, unknown>;
-  const total_value = asMoneyString(qk.total_value);
-  const avg_payments_per_month = asPct(qk.avg_payments_per_month);
-  const avg_value_per_month = asMoneyString(qk.avg_value_per_month);
-  if (
-    typeof qk.payments_count !== "number" ||
-    total_value == null ||
-    avg_payments_per_month == null ||
-    avg_value_per_month == null
-  ) {
-    return null;
-  }
-
-  const qrSeries = qr.series
-    .map((row) => {
-      if (!row || typeof row !== "object") return null;
-      const o = row as Record<string, unknown>;
-      const value = asMoneyString(o.value);
-      if (
-        typeof o.month !== "number" ||
-        typeof o.count !== "number" ||
-        value == null
-      ) {
-        return null;
-      }
-      return { month: o.month, count: o.count, value };
-    })
-    .filter(
-      (x): x is { month: number; count: number; value: string } => x != null
-    );
-
-  const salesTotal = asMoneyString(sk.total_value);
-  const salesAvg = asMoneyString(sk.avg_value_per_month);
-  if (salesTotal == null || salesAvg == null) return null;
-
-  const salesSeries = sales.series
-    .map((row) => {
-      if (!row || typeof row !== "object") return null;
-      const o = row as Record<string, unknown>;
-      const value = asMoneyString(o.value);
-      if (typeof o.month !== "number" || value == null) return null;
-      return { month: o.month, value };
-    })
-    .filter((x): x is { month: number; value: string } => x != null);
-
-  const by_shift = Array.isArray(sk.by_shift)
-    ? sk.by_shift
-        .map(parseShiftKpi)
-        .filter((x): x is ShiftKpi => x != null)
-    : [];
-
-  const compare = parseCompare(raw.compare);
-  if (!compare) return null;
-
-  const invoices = parseYearInvoices(raw.invoices) ?? undefined;
-  const employees = parseYearEmployees(raw.employees) ?? undefined;
-
-  return {
-    period: "year",
-    year: raw.year,
-    drogueria_id: raw.drogueria_id,
-    shift_count: raw.shift_count,
-    divisor_months: raw.divisor_months,
-    qr: {
+  let qr: YearStats["qr"];
+  if (raw.qr != null && typeof raw.qr === "object") {
+    const q = raw.qr as Record<string, unknown>;
+    if (!q.kpis || typeof q.kpis !== "object" || !Array.isArray(q.series)) {
+      return null;
+    }
+    const qk = q.kpis as Record<string, unknown>;
+    const total_value = asMoneyString(qk.total_value);
+    const avg_payments_per_month = asPct(qk.avg_payments_per_month);
+    const avg_value_per_month = asMoneyString(qk.avg_value_per_month);
+    if (
+      typeof qk.payments_count !== "number" ||
+      total_value == null ||
+      avg_payments_per_month == null ||
+      avg_value_per_month == null
+    ) {
+      return null;
+    }
+    const qrSeries = q.series
+      .map((row) => {
+        if (!row || typeof row !== "object") return null;
+        const o = row as Record<string, unknown>;
+        const value = asMoneyString(o.value);
+        if (
+          typeof o.month !== "number" ||
+          typeof o.count !== "number" ||
+          value == null
+        ) {
+          return null;
+        }
+        return { month: o.month, count: o.count, value };
+      })
+      .filter(
+        (x): x is { month: number; count: number; value: string } => x != null
+      );
+    qr = {
       kpis: {
         payments_count: qk.payments_count,
         total_value,
@@ -1100,8 +1081,34 @@ function parseYearStats(raw: Record<string, unknown>): YearStats | null {
         vs_previous: parseVsPrevious(qk.vs_previous),
       },
       series: qrSeries,
-    },
-    sales: {
+    };
+  }
+
+  let sales: YearStats["sales"];
+  if (raw.sales != null && typeof raw.sales === "object") {
+    const s = raw.sales as Record<string, unknown>;
+    if (!s.kpis || typeof s.kpis !== "object" || !Array.isArray(s.series)) {
+      return null;
+    }
+    const sk = s.kpis as Record<string, unknown>;
+    const salesTotal = asMoneyString(sk.total_value);
+    const salesAvg = asMoneyString(sk.avg_value_per_month);
+    if (salesTotal == null || salesAvg == null) return null;
+    const salesSeries = s.series
+      .map((row) => {
+        if (!row || typeof row !== "object") return null;
+        const o = row as Record<string, unknown>;
+        const value = asMoneyString(o.value);
+        if (typeof o.month !== "number" || value == null) return null;
+        return { month: o.month, value };
+      })
+      .filter((x): x is { month: number; value: string } => x != null);
+    const by_shift = Array.isArray(sk.by_shift)
+      ? sk.by_shift
+          .map(parseShiftKpi)
+          .filter((x): x is ShiftKpi => x != null)
+      : [];
+    sales = {
       kpis: {
         total_value: salesTotal,
         avg_value_per_month: salesAvg,
@@ -1115,7 +1122,21 @@ function parseYearStats(raw: Record<string, unknown>): YearStats | null {
         vs_previous: parseVsPrevious(sk.vs_previous),
       },
       series: salesSeries,
-    },
+    };
+  }
+
+  const compare = parseCompare(raw.compare) ?? undefined;
+  const invoices = parseYearInvoices(raw.invoices) ?? undefined;
+  const employees = parseYearEmployees(raw.employees) ?? undefined;
+
+  return {
+    period: "year",
+    year: raw.year,
+    drogueria_id: raw.drogueria_id,
+    shift_count: raw.shift_count,
+    divisor_months: raw.divisor_months,
+    qr,
+    sales,
     invoices,
     employees,
     compare,

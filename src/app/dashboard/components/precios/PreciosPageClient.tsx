@@ -149,7 +149,9 @@ export default function PreciosPageClient() {
       </h1>
       <p className="mt-1 text-sm" style={{ color: "var(--primary-700)" }}>
         Compara precios en 6 droguerías. Los resultados van apareciendo por
-        sitio; no cierres la pestaña mientras busca.
+        sitio; no cierres la pestaña mientras busca. Si Economía o Rebaja tardan
+        mucho, suele ser porque no hay resultados. Clic en la imagen abre la
+        página del producto.
       </p>
 
       <form

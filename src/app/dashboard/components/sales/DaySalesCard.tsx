@@ -1,6 +1,7 @@
 "use client";
 
 import { formatValorCOPTable, parseMoneyFromApi } from "@/lib/money-format";
+import { cajaShiftHourLabel } from "@/lib/caja-shift-hours";
 import {
   amountToApiString,
   apiErrorMessage,
@@ -12,14 +13,18 @@ import { useEffect, useState } from "react";
 const inputClass =
   "h-10 w-full min-w-0 rounded-xl border-2 px-3 text-sm font-semibold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[color:var(--primary-400)] disabled:opacity-60";
 
+/** Solo dígitos; sin puntos, comas ni otros caracteres. */
+function sanitizeAmountInput(raw: string): string {
+  return raw.replace(/\D/g, "");
+}
+
 function displayAmount(amount: string | null): string {
   if (amount == null || amount.trim() === "") return "";
   const n = parseMoneyFromApi(amount);
   if (!Number.isFinite(n)) return "";
-  return n.toLocaleString("es-CO", {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  });
+  // Sin separadores de miles: el usuario escribe 150000, no 150.000
+  if (Number.isInteger(n)) return String(n);
+  return String(n);
 }
 
 function formatDayHeading(ymd: string): string {
@@ -144,23 +149,34 @@ export default function DaySalesCard({
       <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
         {day.shifts.map((s) => {
           const busy = savingShift === s.shift_no || disabled;
+          const hours = cajaShiftHourLabel(drogueriaId, s.shift_no);
           return (
             <label
               key={s.shift_no}
               className="flex flex-col gap-1 text-sm font-semibold"
               style={{ color: "var(--primary-800)" }}
             >
-              Turno {s.shift_no}
+              <span>
+                Turno {s.shift_no}
+                {hours ? (
+                  <span
+                    className="ml-1 text-xs font-medium opacity-80"
+                    style={{ color: "var(--primary-700)" }}
+                  >
+                    · {hours}
+                  </span>
+                ) : null}
+              </span>
               <input
                 type="text"
-                inputMode="decimal"
-                placeholder="Sin registrar"
+                inputMode="numeric"
+                placeholder="Ej. 150000"
                 value={drafts[s.shift_no] ?? ""}
                 disabled={busy}
                 onChange={(e) =>
                   setDrafts((prev) => ({
                     ...prev,
-                    [s.shift_no]: e.target.value,
+                    [s.shift_no]: sanitizeAmountInput(e.target.value),
                   }))
                 }
                 onBlur={() => void saveShift(s.shift_no)}
