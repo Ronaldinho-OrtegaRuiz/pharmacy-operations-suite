@@ -770,12 +770,12 @@ export default function StatsPageClient() {
                     value={formatPct(data.sales.kpis.vs_previous.value_pct)}
                   />
                   <KpiChip
-                    label="Mejor turno:"
-                    value={formatShiftDayExtreme(data.sales.kpis.best_shift_day)}
+                    label="Mejor día:"
+                    value={formatExtremeDay(data.sales.kpis.best_day ?? null)}
                   />
                   <KpiChip
-                    label="Peor turno:"
-                    value={formatShiftDayExtreme(data.sales.kpis.worst_shift_day)}
+                    label="Peor día:"
+                    value={formatExtremeDay(data.sales.kpis.worst_day ?? null)}
                   />
                   {data.sales.kpis.by_shift.map((s) => (
                     <KpiChip

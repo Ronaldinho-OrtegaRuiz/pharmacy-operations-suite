@@ -261,6 +261,8 @@ export type YearStats = {
       by_shift: ShiftKpi[];
       best_shift?: ShiftExtreme;
       worst_shift?: ShiftExtreme;
+      best_day?: ExtremeDay;
+      worst_day?: ExtremeDay;
       best_shift_day?: ShiftDayExtreme;
       worst_shift_day?: ShiftDayExtreme;
       vs_previous: VsPrevious;
@@ -1101,6 +1103,8 @@ function parseYearStats(raw: Record<string, unknown>): YearStats | null {
         by_shift,
         best_shift: parseShiftExtreme(sk.best_shift),
         worst_shift: parseShiftExtreme(sk.worst_shift),
+        best_day: parseExtremeDay(sk.best_day),
+        worst_day: parseExtremeDay(sk.worst_day),
         best_shift_day: parseShiftDayExtreme(sk.best_shift_day),
         worst_shift_day: parseShiftDayExtreme(sk.worst_shift_day),
         vs_previous: parseVsPrevious(sk.vs_previous),
