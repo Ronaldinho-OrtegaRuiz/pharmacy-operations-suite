@@ -115,13 +115,6 @@ export type ShiftDayExtreme = {
   value: string;
 } | null;
 
-/** Mejor/peor jornada de un turno en un mes (period=year). */
-export type ShiftMonthExtreme = {
-  shift_no: number;
-  month: number;
-  value: string;
-} | null;
-
 export type StatsCompare = {
   qr_total: string;
   sales_total: string;
@@ -268,8 +261,8 @@ export type YearStats = {
       by_shift: ShiftKpi[];
       best_shift?: ShiftExtreme;
       worst_shift?: ShiftExtreme;
-      best_shift_month?: ShiftMonthExtreme;
-      worst_shift_month?: ShiftMonthExtreme;
+      best_shift_day?: ShiftDayExtreme;
+      worst_shift_day?: ShiftDayExtreme;
       vs_previous: VsPrevious;
     };
     series: { month: number; value: string }[];
@@ -680,15 +673,6 @@ function parseShiftDayExtreme(raw: unknown): ShiftDayExtreme {
   const value = asMoneyString(o.value);
   if (value == null) return null;
   return { shift_no: o.shift_no, date: o.date, value };
-}
-
-function parseShiftMonthExtreme(raw: unknown): ShiftMonthExtreme {
-  if (!raw || typeof raw !== "object") return null;
-  const o = raw as Record<string, unknown>;
-  if (typeof o.shift_no !== "number" || typeof o.month !== "number") return null;
-  const value = asMoneyString(o.value);
-  if (value == null) return null;
-  return { shift_no: o.shift_no, month: o.month, value };
 }
 
 function parseShiftKpi(raw: unknown): ShiftKpi | null {
@@ -1117,8 +1101,8 @@ function parseYearStats(raw: Record<string, unknown>): YearStats | null {
         by_shift,
         best_shift: parseShiftExtreme(sk.best_shift),
         worst_shift: parseShiftExtreme(sk.worst_shift),
-        best_shift_month: parseShiftMonthExtreme(sk.best_shift_month),
-        worst_shift_month: parseShiftMonthExtreme(sk.worst_shift_month),
+        best_shift_day: parseShiftDayExtreme(sk.best_shift_day),
+        worst_shift_day: parseShiftDayExtreme(sk.worst_shift_day),
         vs_previous: parseVsPrevious(sk.vs_previous),
       },
       series: salesSeries,

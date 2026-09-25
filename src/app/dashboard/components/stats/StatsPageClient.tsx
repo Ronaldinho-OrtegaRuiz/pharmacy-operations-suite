@@ -12,7 +12,6 @@ import {
   type ExtremeMonth,
   type NequiStatsResponse,
   type ShiftDayExtreme,
-  type ShiftMonthExtreme,
   type StatsResponse,
 } from "@/lib/stats";
 import { useRouter } from "next/navigation";
@@ -118,12 +117,6 @@ function formatExtremeMonth(ex: ExtremeMonth): string {
 function formatShiftDayExtreme(ex: ShiftDayExtreme | undefined): string {
   if (!ex) return "—";
   return `T${ex.shift_no} · ${formatYmdShort(ex.date)} · ${moneyFromApi(ex.value)}`;
-}
-
-function formatShiftMonthExtreme(ex: ShiftMonthExtreme | undefined): string {
-  if (!ex) return "—";
-  const name = MONTH_NAMES_ES[ex.month - 1] ?? `Mes ${ex.month}`;
-  return `T${ex.shift_no} · ${name} · ${moneyFromApi(ex.value)}`;
 }
 
 function KpiChip({
@@ -778,15 +771,11 @@ export default function StatsPageClient() {
                   />
                   <KpiChip
                     label="Mejor turno:"
-                    value={formatShiftMonthExtreme(
-                      data.sales.kpis.best_shift_month
-                    )}
+                    value={formatShiftDayExtreme(data.sales.kpis.best_shift_day)}
                   />
                   <KpiChip
                     label="Peor turno:"
-                    value={formatShiftMonthExtreme(
-                      data.sales.kpis.worst_shift_month
-                    )}
+                    value={formatShiftDayExtreme(data.sales.kpis.worst_shift_day)}
                   />
                   {data.sales.kpis.by_shift.map((s) => (
                     <KpiChip
@@ -795,12 +784,12 @@ export default function StatsPageClient() {
                       value={`${moneyFromApi(s.total)}${
                         s.avg != null ? ` · prom. ${moneyFromApi(s.avg)}` : ""
                       }${
-                        s.best_month
-                          ? ` · mejor ${formatExtremeMonth(s.best_month)}`
+                        s.best_day
+                          ? ` · mejor ${formatExtremeDay(s.best_day)}`
                           : ""
                       }${
-                        s.worst_month
-                          ? ` · peor ${formatExtremeMonth(s.worst_month)}`
+                        s.worst_day
+                          ? ` · peor ${formatExtremeDay(s.worst_day)}`
                           : ""
                       }`}
                     />
